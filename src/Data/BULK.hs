@@ -1,6 +1,7 @@
 module Data.BULK ( BULK(..) ) where
 
 import Data.Word (Word8, Word16, Word32, Word64)
+import Data.LargeWord (Word128)
 import qualified Data.ByteString as BS
 
 data BULK = Nil
@@ -10,7 +11,9 @@ data BULK = Nil
           | UnsigneWord16 Word16
           | UnsigneWord32 Word32
           | UnsigneWord64 Word64
+          | UnsigneWord128 Word128
           | SignedWord8 Word8
           | SignedWord16 Word16
           | SignedWord32 Word32
           | SignedWord64 Word64
+          | SigneWord128 Word128
