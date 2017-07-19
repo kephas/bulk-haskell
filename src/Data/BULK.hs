@@ -17,3 +17,4 @@ data BULK = Nil
           | SignedWord32 Word32
           | SignedWord64 Word64
           | SigneWord128 Word128
+          | Reference Int Int
