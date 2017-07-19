@@ -1,4 +1,5 @@
 module Data.BULK ( BULK(..) ) where
+{-# LANGUAGE StandaloneDeriving #-}
 
 import Data.Word (Word8, Word16, Word32, Word64)
 import Data.LargeWord (Word128)
@@ -18,3 +19,5 @@ data BULK = Nil
           | SignedWord64 Word64
           | SigneWord128 Word128
           | Reference Int Int
+
+deriving instance Show BULK
