@@ -21,6 +21,7 @@ description:         BULK library for Haskell
 dependencies:
 - base >= 4.7 && < 5
 - bytestring
+- bits
 
 library:
   source-dirs: src

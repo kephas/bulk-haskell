@@ -36,6 +36,7 @@ library
   build-depends:
       base >=4.7 && <5
     , binary
+    , bits
     , bytestring
     , largeword
   default-language: Haskell2010
@@ -55,6 +56,7 @@ test-suite bulk-test
       QuickCheck
     , base >=4.7 && <5
     , binary
+    , bits
     , bulk
     , bytestring
     , hspec
