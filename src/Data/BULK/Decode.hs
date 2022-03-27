@@ -45,6 +45,9 @@ readStream :: IO BULK
 readStream = hReadStream stdin
 
 
+getWord128be :: Get Word128
+getWord128be = flip LargeKey <$> getWord64be <*> getWord64be
+
 -- | Get monad to read one BULK expression
 getExpression :: Get BULK
 getExpression = do
@@ -64,12 +67,12 @@ getExpression = do
     5  -> UnsignedWord16 <$> getWord16be
     6  -> UnsignedWord32 <$> getWord32be
     7  -> UnsignedWord64 <$> getWord64be
-    8  -> UnsignedWord128 <$> (LargeKey <$> getWord64be <*> getWord64be)
+    8  -> UnsignedWord128 <$> getWord128be
     9  -> NegativeWord8 <$> getWord8
     10 -> NegativeWord16 <$> getWord16be
     11 -> NegativeWord32 <$> getWord32be
     12 -> NegativeWord64 <$> getWord64be
-    13 -> NegativeWord128 <$> (LargeKey <$> getWord64be <*> getWord64be)
+    13 -> NegativeWord128 <$> getWord128be
     _  -> Reference (fromIntegral marker) <$> (fromIntegral <$> getWord8)
 
 
