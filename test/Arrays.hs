@@ -17,6 +17,7 @@ smallArray sizeOrder = resize (2 ^ (sizeOrder * 8) - 1)
   nonEmpty [] = False
   nonEmpty _  = True
 
+-- TODO: fails with seed 2144970805
 test_array_decoding :: SpecWith ()
 test_array_decoding = describe "reads arrays" $ do
   prop "reads one-word sized arrays" $ forAll (smallArray 1) $ \array ->
