@@ -73,7 +73,11 @@ getExpression = do
     11 -> NegativeWord32 <$> getWord32be
     12 -> NegativeWord64 <$> getWord64be
     13 -> NegativeWord128 <$> getWord128be
-    _  -> Reference (fromIntegral marker) <$> (fromIntegral <$> getWord8)
+    _
+      | marker < 32
+      -> fail $ show marker ++ " is a reserved marker byte"
+      | otherwise
+      -> Reference (fromIntegral marker) <$> (fromIntegral <$> getWord8)
 
 
 data ParseContext = AtTopLevel | InForm
