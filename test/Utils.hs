@@ -15,6 +15,7 @@ import           Data.Either                    ( isLeft )
 import           Data.Functor                   ( ($>) )
 import           Data.Maybe                     ( catMaybes )
 import           Data.Word                      ( Word8 )
+import           Prelude                 hiding ( words )
 import           System.Random                  ( Random )
 import           Test.Hspec
 import           Test.QuickCheck
@@ -28,6 +29,7 @@ readFails words =
 
 toNums :: Integral a => BULK -> [a]
 toNums (Form exprs) = catMaybes $ map toIntegral exprs
+toNums _            = error "not a form"
 
 arbitraryByte :: (Num a, Random a) => Gen a
 arbitraryByte = choose (0, 255)
