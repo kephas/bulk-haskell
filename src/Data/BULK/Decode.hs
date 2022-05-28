@@ -3,6 +3,7 @@ module Data.BULK.Decode
   , hReadStream
   , readExpression
   , readStream
+  , readFile
   , getExpression
   , getStream
   ) where
@@ -19,6 +20,7 @@ import           Data.Word                      ( Word16
                                                 , Word64
                                                 , Word8
                                                 )
+import           Prelude                 hiding ( readFile )
 import           System.IO                      ( Handle
                                                 , stdin
                                                 )
@@ -44,6 +46,9 @@ readExpression = hReadExpression stdin
 readStream :: IO BULK
 readStream = hReadStream stdin
 
+-- | Read an entire file as a BULK stream
+readFile :: FilePath -> IO BULK
+readFile path = runGet getStream <$> BL.readFile path
 
 getWord128be :: Get Word128
 getWord128be = flip LargeKey <$> getWord64be <*> getWord64be
@@ -73,12 +78,17 @@ getExpression = do
     11 -> NegativeWord32 <$> getWord32be
     12 -> NegativeWord64 <$> getWord64be
     13 -> NegativeWord128 <$> getWord128be
-    _
-      | marker < 32
-      -> fail $ show marker ++ " is a reserved marker byte"
-      | otherwise
-      -> Reference (fromIntegral marker) <$> (fromIntegral <$> getWord8)
+    _ | marker < 32 -> fail $ show marker ++ " is a reserved marker byte"
+      | otherwise   -> getReference marker
 
+getReference :: Word8 -> Get BULK
+getReference marker = go 0 marker
+ where
+  go acc current =
+    let acc' = acc + fromIntegral current
+    in  if current == 255
+          then go acc' =<< getWord8
+          else Reference acc' . fromIntegral <$> getWord8
 
 data ParseContext = AtTopLevel | InForm
 
