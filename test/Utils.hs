@@ -5,11 +5,10 @@ import           Control.Exception              ( ErrorCall
                                                 )
 import           Data.BULK                      ( BULK(Form)
                                                 , getExpression
+                                                , runGet
                                                 , toIntegral
                                                 )
-import           Data.Binary.Get                ( runGet
-                                                , runGetOrFail
-                                                )
+import           Data.Binary.Get                ( runGetOrFail )
 import           Data.ByteString.Lazy           ( pack )
 import           Data.Either                    ( isLeft )
 import           Data.Functor                   ( ($>) )

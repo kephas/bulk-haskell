@@ -1,11 +1,8 @@
 module Data.BULK.Decode
-  ( hReadExpression
-  , hReadStream
-  , readExpression
-  , readStream
-  , readFile
+  ( readFile
   , getExpression
   , getStream
+  , runGet
   ) where
 
 import           Data.BULK.Internal
@@ -25,26 +22,6 @@ import           System.IO                      ( Handle
                                                 , stdin
                                                 )
 
-
-
-hReadGet :: Get BULK -> Handle -> IO BULK
-hReadGet get handle = (runGet get) <$> BL.hGetContents handle
-
--- | Read one BULK expression from the handle
-hReadExpression :: Handle -> IO BULK
-hReadExpression = hReadGet getExpression
-
--- | Read the entire BULK stream from the handle
-hReadStream :: Handle -> IO BULK
-hReadStream = hReadGet getStream
-
--- | Read one BULK expression from stdin
-readExpression :: IO BULK
-readExpression = hReadExpression stdin
-
--- | Read the entire BULK stream from stdin
-readStream :: IO BULK
-readStream = hReadStream stdin
 
 -- | Read an entire file as a BULK stream
 readFile :: FilePath -> IO BULK
