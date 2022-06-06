@@ -5,10 +5,10 @@ import           Control.Exception              ( ErrorCall
                                                 )
 import           Data.BULK                      ( BULK(Form)
                                                 , getExpression
-                                                , runGet
+                                                , parseLazy
                                                 , toIntegral
                                                 )
-import           Data.Binary.Get                ( runGetOrFail )
+import           Data.Binary.Get                ( runGet )
 import           Data.ByteString.Lazy           ( pack )
 import           Data.Either                    ( isLeft )
 import           Data.Functor                   ( ($>) )
@@ -19,12 +19,21 @@ import           System.Random                  ( Random )
 import           Test.Hspec
 import           Test.QuickCheck
 
-readBin :: [Word8] -> BULK
-readBin = runGet getExpression . pack
+readBin :: [Word8] -> Either String BULK
+readBin = parseLazy getExpression . pack
+
+readBin' :: [Word8] -> Either String BULK
+readBin' = Right . runGet getExpression . pack
+
 
 readFails :: [Word8] -> Expectation
-readFails words =
-  (isLeft $ runGetOrFail getExpression $ pack words) `shouldBe` True
+readFails words = (isLeft $ readBin words) `shouldBe` True
+
+shouldParseTo :: [Word8] -> BULK -> Expectation
+words `shouldParseTo` expr = readBin words `shouldBe` Right expr
+
+shouldParseTo' :: [Word8] -> BULK -> Expectation
+words `shouldParseTo'` expr = readBin' words `shouldBe` Right expr
 
 toNums :: Integral a => BULK -> [a]
 toNums (Form exprs) = catMaybes $ map toIntegral exprs

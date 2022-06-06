@@ -28,6 +28,7 @@ library:
   dependencies:
     - largeword
     - binary
+    - binary-parsers
 
 tests:
   bulk-test:

@@ -2,12 +2,13 @@ module Data.BULK.Decode
   ( readFile
   , getExpression
   , getStream
-  , runGet
+  , parseLazy
   ) where
 
 import           Data.BULK.Internal
 import           Data.BULK.Math
 import           Data.Binary.Get
+import           Data.Binary.Parser             ( parseLazy )
 import qualified Data.ByteString.Lazy          as BL
 import           Data.LargeWord                 ( LargeKey(LargeKey)
                                                 , Word128
@@ -24,8 +25,8 @@ import           System.IO                      ( Handle
 
 
 -- | Read an entire file as a BULK stream
-readFile :: FilePath -> IO BULK
-readFile path = runGet getStream <$> BL.readFile path
+readFile :: FilePath -> IO (Either String BULK)
+readFile path = parseLazy getStream <$> BL.readFile path
 
 getWord128be :: Get Word128
 getWord128be = flip LargeKey <$> getWord64be <*> getWord64be
