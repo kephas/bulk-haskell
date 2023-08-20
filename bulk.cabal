@@ -39,6 +39,7 @@ library
     , binary-parsers
     , bits
     , bytestring
+    , extra
     , largeword
   default-language: Haskell2010
 

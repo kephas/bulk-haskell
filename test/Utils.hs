@@ -6,7 +6,7 @@ import Data.Binary.Get (runGet)
 import Data.ByteString.Lazy (pack)
 import Data.Either (isLeft)
 import Data.Functor (($>))
-import Data.Maybe (catMaybes)
+import Data.Maybe (mapMaybe)
 import Data.Word (Word8)
 import System.Random (Random)
 import Test.Hspec
@@ -20,7 +20,7 @@ readBin' :: [Word8] -> Either String BULK
 readBin' = Right . runGet getExpression . pack
 
 readFails :: [Word8] -> Expectation
-readFails words = (isLeft $ readBin words) `shouldBe` True
+readFails words = isLeft (readBin words) `shouldBe` True
 
 shouldParseTo :: [Word8] -> BULK -> Expectation
 words `shouldParseTo` expr = readBin words `shouldBe` Right expr
@@ -29,7 +29,7 @@ shouldParseTo' :: [Word8] -> BULK -> Expectation
 words `shouldParseTo'` expr = readBin' words `shouldBe` Right expr
 
 toNums :: Integral a => BULK -> [a]
-toNums (Form exprs) = catMaybes $ map toIntegral exprs
+toNums (Form exprs) = mapMaybe (toIntegral . Right) exprs
 toNums _ = error "not a form"
 
 arbitraryByte :: (Num a, Random a) => Gen a

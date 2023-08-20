@@ -29,6 +29,7 @@ library:
     - largeword
     - binary
     - binary-parsers
+    - extra
 
 tests:
   bulk-test:

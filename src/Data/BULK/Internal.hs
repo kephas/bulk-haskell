@@ -1,5 +1,6 @@
 module Data.BULK.Internal (
     BULK (..),
+    Syntax (..),
 ) where
 
 import Data.Bits (Bits)
@@ -18,7 +19,6 @@ import Data.Word (
 data BULK
     = Nil
     | Form [BULK]
-    | FormEnd
     | Array ByteString
     | UnsignedWord8 Word8
     | UnsignedWord16 Word16
@@ -32,3 +32,5 @@ data BULK
     | NegativeWord128 Word128
     | Reference Int Int
     deriving (Eq, Ord, Show)
+
+data Syntax = FormEnd
