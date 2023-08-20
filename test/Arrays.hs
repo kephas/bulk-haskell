@@ -22,11 +22,9 @@ smallArray sizeOrder =
 test_array_decoding :: SpecWith ()
 test_array_decoding = describe "reads arrays" $ do
     prop "reads one-word sized arrays" $ forAll (smallArray 1) $ \array ->
-        ([3, 4, asWord $ length array] ++ array ++ infinitePadding)
-            `shouldParseTo'` (Array $ pack array)
+        ([3, 4, asWord $ length array] ++ array) `shouldParseTo` Array (pack array)
     prop "reads two-words sized arrays" $ forAll (smallArray 2) $ \array ->
-        ([3, 5] ++ (asWords 2 $ length array) ++ array ++ infinitePadding)
-            `shouldParseTo'` (Array $ pack array)
+        ([3, 5] ++ asWords 2 (length array) ++ array) `shouldParseTo` Array (pack array)
   where
     asWord = fromInteger . toInteger
 
@@ -35,11 +33,10 @@ test_array_decoding = describe "reads arrays" $ do
 test_bigger_arrays_decoding :: SpecWith ()
 test_bigger_arrays_decoding = describe "reads bigger arrays" $ do
     prop "reads four-words sized arrays" $ forAll (smallArray 3) $ \array ->
-        ([3, 6] ++ (asWords 4 $ length array) ++ array ++ infinitePadding)
-            `shouldParseTo'` (Array $ pack array)
+        ([3, 6] ++ asWords 4 (length array) ++ array) `shouldParseTo` Array (pack array)
 
 asWords :: Int -> Int -> [Word8]
 asWords size num = loop size num []
   where
     loop 0 _ acc = acc
-    loop size' num' acc = loop (size' - 1) (shiftR num' 8) $ (w8 num') : acc
+    loop size' num' acc = loop (size' - 1) (shiftR num' 8) $ w8 num' : acc

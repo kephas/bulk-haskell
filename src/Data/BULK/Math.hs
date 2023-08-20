@@ -3,8 +3,8 @@ module Data.BULK.Math where
 import Data.BULK.Internal
 import Data.Either.Extra (eitherToMaybe)
 
-toIntegral :: Integral a => Either Syntax BULK -> Maybe a
-toIntegral eBulk = do
+parseIntegral :: Integral a => Either Syntax BULK -> Maybe a
+parseIntegral eBulk = do
     bulk <- eitherToMaybe eBulk
     case bulk of
         UnsignedWord8 word -> Just $ fromIntegral word
@@ -18,3 +18,6 @@ toIntegral eBulk = do
         NegativeWord64 word -> Just $ negate $ fromIntegral word
         NegativeWord128 word -> Just $ negate $ fromIntegral word
         _ -> Nothing
+
+toIntegral :: Integral a => BULK -> Maybe a
+toIntegral = parseIntegral . Right

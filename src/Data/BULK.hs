@@ -1,7 +1,13 @@
 module Data.BULK (
-    module BULK,
+    BULK (..),
+    getExpression,
+    getStream,
+    toIntegral,
+    readFile,
+    parseLazy,
 ) where
 
-import Data.BULK.Decode as BULK
-import Data.BULK.Internal as BULK
-import Data.BULK.Math as BULK
+import Data.BULK.Decode (getExpression, getStream, parseLazy, readFile)
+import Data.BULK.Internal (BULK (..))
+import Data.BULK.Math (toIntegral)
+import Prelude hiding (readFile)

@@ -6,7 +6,7 @@ module Data.BULK.Decode (
 ) where
 
 import Data.BULK.Internal
-import Data.BULK.Math
+import Data.BULK.Math (parseIntegral)
 import Data.Binary.Get
 import Data.Binary.Parser (parseLazy)
 import qualified Data.ByteString.Lazy as BL
@@ -42,7 +42,7 @@ getNext = do
         1 -> Right <$> getForm
         2 -> pure $ Left FormEnd
         3 -> do
-            msize <- toIntegral <$> getNext
+            msize <- parseIntegral <$> getNext
             case msize of
                 Nothing -> fail "not a number (while reading an array size)"
                 Just size ->
