@@ -7,7 +7,5 @@ module Data.BULK (
     parseLazy,
 ) where
 
-import Data.BULK.Decode (getExpression, getStream, parseLazy, readFile)
-import Data.BULK.Internal (BULK (..))
-import Data.BULK.Math (toIntegral)
+import Data.BULK.Decode (BULK (..), getExpression, getStream, parseLazy, readFile, toIntegral)
 import Prelude hiding (readFile)

@@ -3,13 +3,16 @@ module Data.BULK.Decode (
     getExpression,
     getStream,
     parseLazy,
+    BULK (..),
+    toIntegral,
 ) where
 
-import Data.BULK.Internal
-import Data.BULK.Math (parseIntegral)
 import Data.Binary.Get
 import Data.Binary.Parser (parseLazy)
+import Data.Bits (Bits)
+import Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy as BL
+import Data.Either.Extra (eitherToMaybe)
 import Data.LargeWord (
     LargeKey (LargeKey),
     Word128,
@@ -25,6 +28,27 @@ import System.IO (
     stdin,
  )
 import Prelude hiding (readFile)
+
+-- | Raw BULK expression
+data BULK
+    = Nil
+    | Form [BULK]
+    | Array ByteString
+    | UnsignedWord8 Word8
+    | UnsignedWord16 Word16
+    | UnsignedWord32 Word32
+    | UnsignedWord64 Word64
+    | UnsignedWord128 Word128
+    | NegativeWord8 Word8
+    | NegativeWord16 Word16
+    | NegativeWord32 Word32
+    | NegativeWord64 Word64
+    | NegativeWord128 Word128
+    | Reference Int Int
+    deriving (Eq, Ord, Show)
+
+-- | Syntax token
+data Syntax = FormEnd
 
 -- | Read an entire file as a BULK stream
 readFile :: FilePath -> IO (Either String BULK)
@@ -97,3 +121,23 @@ getExpression = getNext >>= either (const $ fail "form end at top level") pure
 -- | Get action to read an entire BULK stream
 getStream :: Get BULK
 getStream = getSequence AtTopLevel
+
+parseIntegral :: Integral a => Either Syntax BULK -> Maybe a
+parseIntegral eBulk = do
+    bulk <- eitherToMaybe eBulk
+    case bulk of
+        UnsignedWord8 word -> Just $ fromIntegral word
+        UnsignedWord16 word -> Just $ fromIntegral word
+        UnsignedWord32 word -> Just $ fromIntegral word
+        UnsignedWord64 word -> Just $ fromIntegral word
+        UnsignedWord128 word -> Just $ fromIntegral word
+        NegativeWord8 word -> Just $ negate $ fromIntegral word
+        NegativeWord16 word -> Just $ negate $ fromIntegral word
+        NegativeWord32 word -> Just $ negate $ fromIntegral word
+        NegativeWord64 word -> Just $ negate $ fromIntegral word
+        NegativeWord128 word -> Just $ negate $ fromIntegral word
+        _ -> Nothing
+
+-- | Extract a number from a raw BULK expression
+toIntegral :: Integral a => BULK -> Maybe a
+toIntegral = parseIntegral . Right
