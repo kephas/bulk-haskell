@@ -27,6 +27,8 @@ library
   exposed-modules:
       Data.BULK
       Data.BULK.Decode
+      Data.BULK.Eval
+      Data.BULK.Stdlib
   other-modules:
       Paths_bulk
   hs-source-dirs:

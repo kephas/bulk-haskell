@@ -2,6 +2,8 @@
 
 import Arrays
 import Data.BULK
+import Data.BULK.Eval
+import Data.BULK.Stdlib as BULK
 import Numbers
 import References
 import Test.Hspec
@@ -65,3 +67,9 @@ spec = describe "BULK" $ do
             readBinStream InStream [0] `shouldBe` Left "missing version"
             readBinStream (Version 1 0) [0] `shouldBe` Right (Form [Nil])
             readBinStream (Version 1 1) [0] `shouldBe` Left "bad version"
+    describe "eval" $ do
+        it "evals standard library" $ do
+            eval bulk1 `shouldBe` BULK.version 1 0
+
+bulk1 :: BULK
+bulk1 = Form [Form [Reference 32 0, UnsignedWord8 1, UnsignedWord8 0]]
