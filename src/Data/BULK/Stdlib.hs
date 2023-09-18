@@ -1,4 +1,6 @@
-module Data.BULK.Stdlib where
+module Data.BULK.Stdlib (Bulk32, version) where
 
-version :: Int -> Int -> ()
-version _ _ = ()
+data Bulk32 = Version Int Int deriving (Eq, Show)
+
+version :: Int -> Int -> Bulk32
+version = Version
