@@ -56,3 +56,12 @@ spec = describe "BULK" $ do
         it "reports bad syntax" $ do
             readFile "test/bad nesting.bulk"
                 `shouldReturn` Left "not enough data (while reading a form)"
+        it "checks for version 1.0" $ do
+            readFile "test/missing version.bulk" `shouldReturn` Left "missing version"
+            readFileWithVersion (Version 1 0) "test/missing version.bulk" `shouldReturn` Right (Form [Nil])
+    describe "version and profile" $ do
+        it "checks for version 1.0" $ do
+            readBinStream InStream [1, 32, 0, 4, 1, 4, 1, 2] `shouldBe` Left "bad version"
+            readBinStream InStream [0] `shouldBe` Left "missing version"
+            readBinStream (Version 1 0) [0] `shouldBe` Right (Form [Nil])
+            readBinStream (Version 1 1) [0] `shouldBe` Left "bad version"

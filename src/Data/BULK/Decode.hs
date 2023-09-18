@@ -1,9 +1,11 @@
 module Data.BULK.Decode (
     readFile,
+    readFileWithVersion,
     getExpression,
     getStream,
     parseLazy,
     BULK (..),
+    Version (..),
     toIntegral,
 ) where
 
@@ -50,9 +52,15 @@ data BULK
 -- | Syntax token
 data Syntax = FormEnd
 
+-- | Version specification
+data Version = InStream | Version Int Int
+
 -- | Read an entire file as a BULK stream
 readFile :: FilePath -> IO (Either String BULK)
-readFile path = parseLazy getStream <$> BL.readFile path
+readFile = readFileWithVersion InStream
+
+readFileWithVersion :: Version -> FilePath -> IO (Either String BULK)
+readFileWithVersion version path = parseLazy (getStream version) <$> BL.readFile path
 
 getWord128be :: Get Word128
 getWord128be = flip LargeKey <$> getWord64be <*> getWord64be
@@ -119,8 +127,15 @@ getExpression :: Get BULK
 getExpression = getNext >>= either (const $ fail "form end at top level") pure
 
 -- | Get action to read an entire BULK stream
-getStream :: Get BULK
-getStream = getSequence AtTopLevel
+getStream :: Version -> Get BULK
+getStream (Version 1 0) = getSequence AtTopLevel
+getStream (Version _ _) = fail "bad version"
+getStream InStream = do
+    result@(Form (first : rest)) <- getSequence AtTopLevel
+    case first of
+        Form [Reference 32 0, UnsignedWord8 1, UnsignedWord8 0] -> pure result
+        Form [Reference 32 0, _, _] -> fail "bad version"
+        _ -> fail "missing version"
 
 parseIntegral :: Integral a => Either Syntax BULK -> Maybe a
 parseIntegral eBulk = do
