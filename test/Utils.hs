@@ -24,7 +24,7 @@ readFails words = isLeft (readBin words) `shouldBe` True
 shouldParseTo :: [Word8] -> BULK -> Expectation
 words `shouldParseTo` expr = readBin words `shouldBe` Right expr
 
-toNums :: Integral a => BULK -> [a]
+toNums :: (Integral a) => BULK -> [a]
 toNums (Form exprs) = mapMaybe toIntegral exprs
 toNums _ = error "not a form"
 

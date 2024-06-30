@@ -137,7 +137,7 @@ getStream InStream = do
         Form [Reference 32 0, _, _] -> fail "bad version"
         _ -> fail "missing version"
 
-parseIntegral :: Integral a => Either Syntax BULK -> Maybe a
+parseIntegral :: (Integral a) => Either Syntax BULK -> Maybe a
 parseIntegral eBulk = do
     bulk <- eitherToMaybe eBulk
     case bulk of
@@ -154,5 +154,5 @@ parseIntegral eBulk = do
         _ -> Nothing
 
 -- | Extract a number from a raw BULK expression
-toIntegral :: Integral a => BULK -> Maybe a
+toIntegral :: (Integral a) => BULK -> Maybe a
 toIntegral = parseIntegral . Right
