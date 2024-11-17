@@ -31,6 +31,16 @@ toNums _ = error "not a form"
 arbitraryByte :: (Num a, Random a) => Gen a
 arbitraryByte = choose (0, 255)
 
+smallInt :: (Num a, Random a) => Gen a
+smallInt = choose (0, 63)
+
+smallArray :: Gen [Word8]
+smallArray = do
+    resize 63 $ listOf arbitraryByte
+
+lengthAsWord :: [a] -> Word8
+lengthAsWord = fromIntegral . length
+
 assertErrorCall :: IO a -> IO Bool
 assertErrorCall action = handle handler $ action $> False
   where

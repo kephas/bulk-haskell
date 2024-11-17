@@ -23,6 +23,11 @@ dependencies:
 - bytestring
 - bits
 
+language: Haskell2010
+
+default-extensions:
+- ImportQualifiedPost
+
 library:
   source-dirs: src
   dependencies:
@@ -42,6 +47,7 @@ tests:
     - -Wall
     dependencies:
     - bulk
+    - digits
     - hspec
     - binary
     - QuickCheck

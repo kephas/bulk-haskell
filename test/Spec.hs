@@ -1,7 +1,9 @@
+{-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 import Arrays
 import Data.BULK
+import Data.Word (Word8)
 import Numbers
 import References
 import Test.Hspec
@@ -18,17 +20,17 @@ spec = describe "BULK" $ do
             [1, 2] `shouldParseTo` Form []
             [1, 0, 2] `shouldParseTo` Form [Nil]
             [1, 0, 1, 0, 2, 0, 2] `shouldParseTo` Form [Nil, Form [Nil], Nil]
-        test_array_decoding
+        test_arrays_decoding
         test_number_decoding
         test_references
         it "rejects reserved markers" $
-            mapM_ (\marker -> readFails [marker, 0, 0, 0]) [14 .. 31]
+            mapM_ (\marker -> readFails [marker, 0, 0, 0]) reservedMarkers
     describe "files" $ do
         it "reads simple files" $ do
             readFile "test/nesting.bulk"
                 `shouldReturn` Right
                     ( Form
-                        [ Form [Reference 32 0, UnsignedWord8 1, UnsignedWord8 0]
+                        [ Form [Reference 16 0, Array [1], Array [0]]
                         , Form []
                         , Form [Nil, Form [Nil], Form []]
                         ]
@@ -37,19 +39,20 @@ spec = describe "BULK" $ do
             readFile "test/primitives.bulk"
                 `shouldReturn` Right
                     ( Form
-                        [ Form [Reference 32 0, UnsignedWord8 1, UnsignedWord8 0]
+                        [ Form [Reference 16 0, Array [1], Array [0]]
                         , Form
                             [ Nil
                             , Array "Hello world!"
-                            , UnsignedWord8 0x2A
-                            , UnsignedWord16 0x0100
-                            , UnsignedWord32 0x01000000
-                            , UnsignedWord64 0x0123456789ABCDEF
-                            , NegativeWord8 33
-                            , Reference 32 1
-                            , Reference 32 2
-                            , Reference 254 255
-                            , Reference 698 128
+                            , Array [0x2A]
+                            , Array []
+                            , Array [0x40]
+                            , Array [0x01, 0x00]
+                            , Array [0x01, 0x00, 0x00, 0x00]
+                            , Array [0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF]
+                            , Reference 0x18 0x01
+                            , Reference 0x18 0x02
+                            , Reference 0x7E 0xFF
+                            , Reference (0x7F + 0xFF + 0xBC) 0x1A
                             ]
                         ]
                     )
@@ -61,7 +64,10 @@ spec = describe "BULK" $ do
             readFileWithVersion (Version 1 0) "test/missing version.bulk" `shouldReturn` Right (Form [Nil])
     describe "version and profile" $ do
         it "checks for version 1.0" $ do
-            readBinStream InStream [1, 32, 0, 4, 1, 4, 1, 2] `shouldBe` Left "bad version"
+            readBinStream InStream [1, 0x10, 0x00, 0x81, 0x81, 2] `shouldBe` Left "this application only supports BULK version 1.0"
             readBinStream InStream [0] `shouldBe` Left "missing version"
             readBinStream (Version 1 0) [0] `shouldBe` Right (Form [Nil])
-            readBinStream (Version 1 1) [0] `shouldBe` Left "bad version"
+            readBinStream (Version 1 1) [0] `shouldBe` Left "this application only supports BULK version 1.0"
+
+reservedMarkers :: [Word8]
+reservedMarkers = [0x04 .. 0x0F]
