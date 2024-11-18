@@ -15,9 +15,14 @@ test_arrays_decoding = do
     describe "arrays" $ do
         prop "reads small arrays" $ forAll smallArray $ \array ->
             ((0xC0 + lengthAsWord array) : array) `shouldParseTo` Array (pack array)
-        prop "reads smaller generic arrays" $ test_bigger_arrays_decoding 100 1
-        prop "reads bigger generic arrays" $ test_bigger_arrays_decoding 32 2
-        prop "reads really big generic arrays" $ test_bigger_arrays_decoding 4 3
+        prop "reads smaller generic arrays" $ test_bigger_arrays_decoding 1
+        prop "reads bigger generic arrays" $ withMaxSuccess 32 $ test_bigger_arrays_decoding 2
+        prop "reads really big generic arrays" $ withMaxSuccess 4 $ test_bigger_arrays_decoding 3
+
+test_bigger_arrays_decoding :: Int -> Property
+test_bigger_arrays_decoding size =
+    forAll (arraySizedWith size) $ \array ->
+        ([3, 0xC0 + fromIntegral size] ++ asWords size (length array) ++ array) `shouldParseTo` Array (pack array)
 
 {- | Payload of a random array sized with an integer fitting in N
    | bytes (not a small array)
@@ -30,11 +35,13 @@ arraySizedWith sizeOrder = do
     minSize = if sizeOrder == 1 then 64 else 2 ^ ((sizeOrder - 1) * 8)
     maxSize = 2 ^ (sizeOrder * 8) - 1
 
-test_bigger_arrays_decoding :: Int -> Int -> Property
-test_bigger_arrays_decoding successes size =
-    withMaxSuccess successes $ forAll (arraySizedWith size) $ \array ->
-        ([3, 0xC0 + fromIntegral size] ++ asWords size (length array) ++ array) `shouldParseTo` Array (pack array)
+{- | Convert an Int to its binary representation as N bytes
 
+=== Example
+
+>> asWords 3 511
+[0, 1, 255]
+-}
 asWords :: Int -> Int -> [Word8]
 asWords size num = loop size num []
   where
