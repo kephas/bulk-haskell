@@ -1,12 +1,12 @@
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-import Arrays
 import Data.BULK
+import Data.ByteString.Lazy (pack)
 import Data.Word (Word8)
-import Numbers
-import References
 import Test.Hspec
+import Test.Hspec.QuickCheck (prop)
+import Test.QuickCheck (Property, forAll, withMaxSuccess)
 import Utils
 import Prelude hiding (readFile)
 
@@ -21,26 +21,37 @@ spec = describe "BULK" $ do
                 [1, 2] `shouldParseTo` Form []
                 [1, 0, 2] `shouldParseTo` Form [Nil]
                 [1, 0, 1, 0, 2, 0, 2] `shouldParseTo` Form [Nil, Form [Nil], Nil]
-            test_arrays_decoding
-            test_number_decoding
-            test_references
+            describe "arrays" $ do
+                prop "reads small arrays" $ forAll smallArray $ \array ->
+                    ((0xC0 + lengthAsWord array) : array) `shouldParseTo` Array (pack array)
+                prop "reads smaller generic arrays" $ test_bigger_arrays_decoding 1
+                prop "reads bigger generic arrays" $ withMaxSuccess 32 $ test_bigger_arrays_decoding 2
+                prop "reads really big generic arrays" $ withMaxSuccess 4 $ test_bigger_arrays_decoding 3
+            describe "reads numbers" $ do
+                prop "reads small ints" $ forAll smallInt $ \num ->
+                    toNums <$> readBin [1, 0x80 + num, 2] `shouldBe` Right [num]
+                prop "reads ints in small arrays" $ forAll smallArray $ \array ->
+                    toNums <$> readBin ([1, 0xC0 + lengthAsWord array] ++ array ++ [2]) `shouldBe` Right [unDigits array]
+            describe "read references" $ do
+                prop "reads one-word marker references" $
+                    forAll anySimpleReference $ \(marker, ref) ->
+                        [marker, ref] `shouldParseTo` Reference (fromIntegral marker) (fromIntegral ref)
+                prop "reads two-words marker references" $
+                    forAll anySimpleReference $ \(marker, ref) ->
+                        [0x7F, marker, ref] `shouldParseTo` Reference (0x7F + fromIntegral marker) (fromIntegral ref)
+                prop "reads three-words marker references" $
+                    forAll anySimpleReference $ \(marker, ref) ->
+                        [0x7F, 0xFF, marker, ref] `shouldParseTo` Reference (0x7F + 0xFF + fromIntegral marker) (fromIntegral ref)
             it "rejects reserved markers" $
                 mapM_ (\marker -> readFails [marker, 0, 0, 0]) reservedMarkers
         describe "files" $ do
             it "reads simple files" $ do
                 readFile "test/nesting.bulk"
-                    `shouldReturn` Right
-                        ( Form
-                            [ Form [Reference 16 0, Array [1], Array [0]]
-                            , Form []
-                            , Form [Nil, Form [Nil], Form []]
-                            ]
-                        )
-
+                    `shouldReturn` Right (Form [bulk_v1_0, Form [], Form [Nil, Form [Nil], Form []]])
                 readFile "test/primitives.bulk"
                     `shouldReturn` Right
                         ( Form
-                            [ Form [Reference 16 0, Array [1], Array [0]]
+                            [ bulk_v1_0
                             , Form
                                 [ Nil
                                 , Array "Hello world!"
@@ -75,3 +86,11 @@ spec = describe "BULK" $ do
 
 reservedMarkers :: [Word8]
 reservedMarkers = [0x04 .. 0x0F]
+
+test_bigger_arrays_decoding :: Int -> Property
+test_bigger_arrays_decoding size =
+    forAll (arraySizedWith size) $ \array ->
+        ([3, 0xC0 + fromIntegral size] ++ asWords size (length array) ++ array) `shouldParseTo` Array (pack array)
+
+bulk_v1_0 :: BULK
+bulk_v1_0 = Form [Reference 16 0, Array [1], Array [0]]

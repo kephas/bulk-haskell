@@ -48,9 +48,6 @@ test-suite bulk-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
-      Arrays
-      Numbers
-      References
       Utils
       Paths_bulk
   hs-source-dirs:
