@@ -4,10 +4,11 @@
 import Data.BULK
 import Data.ByteString.Lazy (pack)
 import Data.Word (Word8)
+import Test.BULK.Decode
+import Test.BULK.Encode ()
 import Test.Hspec
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck (Property, forAll, withMaxSuccess)
-import Utils
 import Prelude hiding (readFile)
 
 main :: IO ()
@@ -83,6 +84,10 @@ spec = describe "BULK" $ do
     describe "encoding" $ do
         it "encodes primitives" $ do
             encode [Nil] `shouldBe` [0]
+            encode [Form []] `shouldBe` [1, 2]
+            encode [Array []] `shouldBe` [0xC0]
+        prop "round-trips arbitrary primitives" $ \expr ->
+            encode [expr] `shouldParseTo` expr
 
 reservedMarkers :: [Word8]
 reservedMarkers = [0x04 .. 0x0F]

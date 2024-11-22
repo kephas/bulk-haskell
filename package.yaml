@@ -50,5 +50,6 @@ tests:
     - digits
     - hspec
     - binary
+    - quickcheck-instances
     - QuickCheck
     - random

@@ -1,4 +1,4 @@
-module Utils where
+module Test.BULK.Decode where
 
 import Control.Exception (ErrorCall, handle)
 import Data.BULK (BULK (Form), Version, getExpression, getStream, parseLazy, toIntegral)
@@ -12,7 +12,7 @@ import Data.Maybe (mapMaybe)
 import Data.Word (Word8)
 import System.Random (Random)
 import Test.Hspec
-import Test.QuickCheck
+import Test.QuickCheck (Gen, choose, listOf, resize, vectorOf)
 import Prelude hiding (words)
 
 readBin :: [Word8] -> Either String BULK
