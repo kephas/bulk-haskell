@@ -86,6 +86,8 @@ spec = describe "BULK" $ do
             encode [Nil] `shouldBe` [0]
             encode [Form []] `shouldBe` [1, 2]
             encode [Array []] `shouldBe` [0xC0]
+        it "encodes numbers" $ do
+            encodeInt 0 `shouldBe` Array [0]
         prop "round-trips arbitrary primitives" $ \expr ->
             encode [expr] `shouldParseTo` expr
 

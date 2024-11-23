@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedLists #-}
 
-module Data.BULK.Encode (encode)
+module Data.BULK.Encode (encode, encodeInt)
 where
 
 import Data.BULK.Decode (BULK (..))
@@ -19,3 +19,6 @@ encodeExpr (Array bs) =
         else []
   where
     len = BS.length bs
+
+encodeInt :: Int -> BULK
+encodeInt 0 = Array [0]
