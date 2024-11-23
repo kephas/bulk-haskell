@@ -8,7 +8,7 @@ import Test.QuickCheck.Instances.ByteString ()
 import Prelude hiding (words)
 
 instance Arbitrary BULK where
-    arbitrary = oneof [pure Nil, Form <$> sized form, Array <$> arbitrary]
+    arbitrary = oneof [pure Nil, Form <$> sized form, Array <$> arbitrary, ref]
       where
         form :: Int -> Gen [BULK]
         form 0 = pure []
@@ -16,3 +16,4 @@ instance Arbitrary BULK where
             headSize <- chooseInt (1, n)
             let restSize = n - headSize
             (:) <$> (Form <$> form (headSize - 1)) <*> form restSize
+        ref = Reference <$> chooseInt (0x10, 0x7E) <*> chooseInt (0x00, 0xFF)

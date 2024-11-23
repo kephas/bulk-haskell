@@ -84,7 +84,7 @@ spec = describe "BULK" $ do
                 readBinStream (Version 1 1) [0] `shouldBe` Left "this application only supports BULK version 1.0"
     describe "encoding" $ do
         it "encodes primitives" $ do
-            encode [Nil, Form [], Array []] `shouldBe` [0, 1, 2, 0xC0]
+            encode [Nil, Form [], Array [], Reference 16 0] `shouldBe` [0, 1, 2, 0xC0, 16, 0]
         it "encodes numbers" $ do
             map (encodeInt @Int) [0, 1, 255, 256] `shouldBe` [Array [0], Array [1], Array [255], Array [1, 0]]
         prop "round-trips arbitrary primitives" $ \expr ->

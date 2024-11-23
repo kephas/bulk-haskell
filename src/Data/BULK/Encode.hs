@@ -20,6 +20,7 @@ encodeExpr (Array bs) =
         else [3] ++ encodeExpr (encodeInt $ fromIntegral len) ++ BS.unpack bs
   where
     len = BS.length bs
+encodeExpr (Reference ns name) = map fromIntegral [ns, name]
 
 encodeInt :: (Integral a) => a -> BULK
 encodeInt = Array . BS.pack . asWords
