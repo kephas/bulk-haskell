@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
 
 import Data.BULK
 import Data.ByteString.Lazy (pack)
@@ -83,11 +84,9 @@ spec = describe "BULK" $ do
                 readBinStream (Version 1 1) [0] `shouldBe` Left "this application only supports BULK version 1.0"
     describe "encoding" $ do
         it "encodes primitives" $ do
-            encode [Nil] `shouldBe` [0]
-            encode [Form []] `shouldBe` [1, 2]
-            encode [Array []] `shouldBe` [0xC0]
+            encode [Nil, Form [], Array []] `shouldBe` [0, 1, 2, 0xC0]
         it "encodes numbers" $ do
-            encodeInt 0 `shouldBe` Array [0]
+            map (encodeInt @Int) [0, 1, 255, 256] `shouldBe` [Array [0], Array [1], Array [255], Array [1, 0]]
         prop "round-trips arbitrary primitives" $ \expr ->
             encode [expr] `shouldParseTo` expr
 
