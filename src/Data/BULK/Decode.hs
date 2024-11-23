@@ -5,7 +5,7 @@ module Data.BULK.Decode (
     getStream,
     parseLazy,
     BULK (..),
-    Version (..),
+    VersionConstraint (..),
     toIntegral,
 ) where
 
@@ -37,13 +37,13 @@ data BULK
 data Syntax = FormEnd
 
 -- | Version specification
-data Version = InStream | Version Int Int
+data VersionConstraint = InStream | Version Int Int
 
 -- | Read an entire file as a BULK stream
 readFile :: FilePath -> IO (Either String BULK)
 readFile = readFileWithVersion InStream
 
-readFileWithVersion :: Version -> FilePath -> IO (Either String BULK)
+readFileWithVersion :: VersionConstraint -> FilePath -> IO (Either String BULK)
 readFileWithVersion version path = parseLazy (getStream version) <$> BL.readFile path
 
 -- | Get monad to read one BULK expression
@@ -107,7 +107,7 @@ getExpression :: Get BULK
 getExpression = getNext >>= either (const $ fail "form end at top level") pure
 
 -- | Get action to read an entire BULK stream
-getStream :: Version -> Get BULK
+getStream :: VersionConstraint -> Get BULK
 getStream (Version 1 0) = getSequence AtTopLevel
 getStream (Version _ _) = fail "this application only supports BULK version 1.0"
 getStream InStream = do

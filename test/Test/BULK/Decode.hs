@@ -1,7 +1,7 @@
 module Test.BULK.Decode where
 
 import Control.Exception (ErrorCall, handle)
-import Data.BULK (BULK (Form), Version, getExpression, getStream, parseLazy, toIntegral)
+import Data.BULK (BULK (Form), VersionConstraint, getExpression, getStream, parseLazy, toIntegral)
 import Data.Bits (shiftR)
 import Data.Bits.Extras (w8)
 import Data.ByteString.Lazy (pack)
@@ -18,7 +18,7 @@ import Prelude hiding (words)
 readBin :: [Word8] -> Either String BULK
 readBin = parseLazy getExpression . pack
 
-readBinStream :: Version -> [Word8] -> Either String BULK
+readBinStream :: VersionConstraint -> [Word8] -> Either String BULK
 readBinStream version = parseLazy (getStream version) . pack
 
 readFails :: [Word8] -> Expectation
