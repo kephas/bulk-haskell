@@ -20,7 +20,9 @@ encodeExpr (Array bs) =
         else [3] ++ encodeExpr (encodeInt $ fromIntegral len) ++ BS.unpack bs
   where
     len = BS.length bs
-encodeExpr (Reference ns name) = map fromIntegral [ns, name]
+encodeExpr (Reference ns name)
+    | ns < 0x7F = map fromIntegral [ns, name]
+    | otherwise = cutInWords ns ++ [fromIntegral name]
 
 encodeInt :: (Integral a) => a -> BULK
 encodeInt = Array . BS.pack . asWords
@@ -32,3 +34,13 @@ asWords num =
         else words
   where
     words = map fromIntegral $ digits 256 num
+
+cutInWords :: (Integral a) => a -> [Word8]
+cutInWords num =
+    map fromIntegral $ cut 0x7F num
+  where
+    cut remove remain =
+        case (remain, remain >= remove) of
+            (0, _) -> [0]
+            (final, False) -> [final]
+            (_, True) -> remove : cut 0xFF (remain - remove)

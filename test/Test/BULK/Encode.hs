@@ -16,4 +16,4 @@ instance Arbitrary BULK where
             headSize <- chooseInt (1, n)
             let restSize = n - headSize
             (:) <$> (Form <$> form (headSize - 1)) <*> form restSize
-        ref = Reference <$> chooseInt (0x10, 0x7E) <*> chooseInt (0x00, 0xFF)
+        ref = Reference <$> chooseInt (0x10, 0xFFFF) <*> chooseInt (0x00, 0xFF)
