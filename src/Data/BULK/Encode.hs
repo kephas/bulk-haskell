@@ -14,6 +14,7 @@ encode = foldr (\expr -> (encodeExpr expr ++)) []
 encodeExpr :: BULK -> [Word8]
 encodeExpr Nil = [0]
 encodeExpr (Form exprs) = [1] ++ encode exprs ++ [2]
+encodeExpr (Array [num]) | num < 64 = [0x80 + fromIntegral num]
 encodeExpr (Array bs) =
     if len < 64
         then fromIntegral (0xC0 + len) : BS.unpack bs
