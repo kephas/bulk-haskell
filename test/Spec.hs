@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeApplications #-}
+{-# OPTIONS_GHC -Wno-type-defaults #-}
 
 import Data.BULK
 import Data.ByteString.Lazy (pack)
@@ -86,7 +86,7 @@ spec = describe "BULK" $ do
         it "encodes primitives" $ do
             encode [Nil, Form [], Array [], Reference 16 0] `shouldBe` [0, 1, 2, 0xC0, 16, 0]
         it "encodes numbers" $ do
-            map (encodeInt @Int) [0, 1, 255, 256] `shouldBe` [Array [0], Array [1], Array [255], Array [1, 0]]
+            map encodeInt [0, 1, 255, 256] `shouldBe` [Array [0], Array [1], Array [255], Array [1, 0]]
             encode [Array [0], Array [1], Array [255], Array [1, 0]] `shouldBe` [0x80, 0x81, 0xC1, 0xFF, 0xC2, 0x01, 0x00]
         prop "round-trips arbitrary primitives" $ \expr ->
             encode [expr] `shouldParseTo` expr
