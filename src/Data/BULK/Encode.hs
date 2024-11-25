@@ -4,26 +4,30 @@ module Data.BULK.Encode (encode, encodeInt)
 where
 
 import Data.BULK.Decode (BULK (..))
+import Data.ByteString.Builder as BB
 import Data.ByteString.Lazy qualified as BS
 import Data.Digits (digits)
 import Data.Word (Word8)
 
-encode :: [BULK] -> [Word8]
-encode = foldr (\expr -> (encodeExpr expr ++)) []
+encode :: [BULK] -> BS.ByteString
+encode = BB.toLazyByteString . encodeSeq
 
-encodeExpr :: BULK -> [Word8]
-encodeExpr Nil = [0]
-encodeExpr (Form exprs) = [1] ++ encode exprs ++ [2]
-encodeExpr (Array [num]) | num < 64 = [0x80 + fromIntegral num]
+encodeSeq :: [BULK] -> BB.Builder
+encodeSeq = foldMap encodeExpr
+
+encodeExpr :: BULK -> BB.Builder
+encodeExpr Nil = BB.word8 0
+encodeExpr (Form exprs) = BB.word8 1 <> encodeSeq exprs <> BB.word8 2
+encodeExpr (Array [num]) | num < 64 = BB.word8 $ 0x80 + num
 encodeExpr (Array bs) =
     if len < 64
-        then fromIntegral (0xC0 + len) : BS.unpack bs
-        else [3] ++ encodeExpr (encodeInt $ fromIntegral len) ++ BS.unpack bs
+        then BB.word8 (fromIntegral $ 0xC0 + len) <> BB.lazyByteString bs
+        else BB.word8 3 <> encodeExpr (encodeInt len) <> BB.lazyByteString bs
   where
     len = BS.length bs
 encodeExpr (Reference ns name)
-    | ns < 0x7F = map fromIntegral [ns, name]
-    | otherwise = cutInWords ns ++ [fromIntegral name]
+    | ns < 0x7F = int ns <> int name
+    | otherwise = foldMap int $ cutInWords ns ++ [name]
 
 encodeInt :: (Integral a) => a -> BULK
 encodeInt = Array . BS.pack . asWords
@@ -36,12 +40,15 @@ asWords num =
   where
     words = map fromIntegral $ digits 256 num
 
-cutInWords :: (Integral a) => a -> [Word8]
-cutInWords num =
-    map fromIntegral $ cut 0x7F num
+cutInWords :: Int -> [Int]
+cutInWords =
+    cut 0x7F
   where
     cut remove remain =
         case (remain, remain >= remove) of
             (0, _) -> [0]
             (final, False) -> [final]
             (_, True) -> remove : cut 0xFF (remain - remove)
+
+int :: Int -> BB.Builder
+int = BB.word8 . fromIntegral

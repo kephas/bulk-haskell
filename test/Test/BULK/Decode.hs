@@ -4,7 +4,7 @@ import Control.Exception (ErrorCall, handle)
 import Data.BULK (BULK (Form), VersionConstraint, getExpression, getStream, parseLazy, toIntegral)
 import Data.Bits (shiftR)
 import Data.Bits.Extras (w8)
-import Data.ByteString.Lazy (pack)
+import Data.ByteString.Lazy (ByteString, pack)
 import Data.Digits qualified as D
 import Data.Either (isLeft)
 import Data.Functor (($>))
@@ -26,6 +26,9 @@ readFails words = isLeft (readBin words) `shouldBe` True
 
 shouldParseTo :: [Word8] -> BULK -> Expectation
 words `shouldParseTo` expr = readBin words `shouldBe` Right expr
+
+shouldParseBSTo :: ByteString -> BULK -> Expectation
+words `shouldParseBSTo` expr = parseLazy getExpression words `shouldBe` Right expr
 
 toNums :: (Integral a) => BULK -> [a]
 toNums (Form exprs) = mapMaybe toIntegral exprs

@@ -89,7 +89,7 @@ spec = describe "BULK" $ do
             map encodeInt [0, 1, 255, 256] `shouldBe` [Array [0], Array [1], Array [255], Array [1, 0]]
             encode [Array [0], Array [1], Array [255], Array [1, 0]] `shouldBe` [0x80, 0x81, 0xC1, 0xFF, 0xC2, 0x01, 0x00]
         prop "round-trips arbitrary primitives" $ \expr ->
-            encode [expr] `shouldParseTo` expr
+            encode [expr] `shouldParseBSTo` expr
 
 reservedMarkers :: [Word8]
 reservedMarkers = [0x04 .. 0x0F]
