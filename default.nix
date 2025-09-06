@@ -1,34 +1,14 @@
-{ pkgs ? import <nixpkgs> {}
-, haskellPackages ? pkgs.haskellPackages
-, withHoogle ? false }:
+{ pkgs ? import (fetchTarball https://github.com/NixOS/nixpkgs/archive/refs/tags/22.11.tar.gz) {} }:
 
-let haskellOverrides = self: super:
-    ( if withHoogle
-      then {
-        ghc = super.ghc // { withPackages = super.ghc.withHoogle; };
-        ghcWithPackages = self.ghc.withPackages;
-      } else {}
-    ) // {
-      # somePackage = self.callHackage "somePackage" "0.version.bump.0" {};
-    };
-    hp = haskellPackages.override { overrides = haskellOverrides; };
-    cabal2nixResult = src: pkgs.runCommand "cabal2nixResult" {
-      buildCommand = ''
-        cabal2nix file://"${src}" >"$out"
-      '';
-      buildInputs = [ pkgs.cabal2nix ];
+let hp2505 = (import (fetchTarball https://github.com/NixOS/nixpkgs/archive/refs/tags/25.05.tar.gz) {}).haskellPackages;
+    hp = pkgs.haskellPackages.override { overrides = self: super: { digits = hp2505.digits; }; };
+    hlib = pkgs.haskell.lib.compose;
+    compose = with pkgs.lib.trivial; flip pipe;
+in
 
-      # Support unicode characters in cabal files
-      ${if !pkgs.stdenv.isDarwin then "LOCALE_ARCHIVE" else null} = "${pkgs.glibcLocales}/lib/locale/locale-archive";
-      ${if !pkgs.stdenv.isDarwin then "LC_ALL" else null} = "en_US.UTF-8";
-    } "";
-
-in pkgs.haskell.lib.overrideCabal (hp.callPackage (cabal2nixResult ./.) {}) (self: {
-  src = builtins.filterSource (path: type:
-    type != "unknown"
-    && baseNameOf path != ".git"
-    && baseNameOf path != "result"
-    && baseNameOf path != "dist"
-    && baseNameOf path != ".stack-work"
-  ) self.src;
-})
+# missing dev.haskellPackages.digits
+hp.developPackage {
+  root = ./.;
+  modifier = compose [(hlib.addExtraLibrary hp.shake)
+                      (hlib.addBuildTools (with pkgs; [ shake haskell-language-server hlint ]))];
+}
