@@ -3,13 +3,15 @@
 {-# OPTIONS_GHC -Wno-type-defaults #-}
 
 import Data.BULK
-import Data.ByteString.Lazy (pack)
+import Data.ByteString.Lazy (cons, pack)
+import Data.Function (on)
+import Data.List (nubBy)
 import Data.Word (Word8)
 import Test.BULK.Decode
 import Test.BULK.Encode ()
 import Test.Hspec
 import Test.Hspec.QuickCheck (prop)
-import Test.QuickCheck (Property, forAll, withMaxSuccess)
+import Test.QuickCheck (Property, arbitrary, forAll, listOf, withMaxSuccess)
 import Prelude hiding (readFile)
 
 main :: IO ()
@@ -25,10 +27,10 @@ spec = describe "BULK" $ do
                 [1, 0, 1, 0, 2, 0, 2] `shouldParseTo` Form [Nil, Form [Nil], Nil]
             describe "arrays" $ do
                 prop "reads small arrays" $ forAll smallArray $ \array ->
-                    ((0xC0 + lengthAsWord array) : array) `shouldParseTo` Array (pack array)
+                    ((0xC0 + lengthAsWord array) `cons` pack array) `shouldParseTo` Array (pack array)
                 prop "reads smaller generic arrays" $ test_bigger_arrays_decoding 1
-                prop "reads bigger generic arrays" $ withMaxSuccess 32 $ test_bigger_arrays_decoding 2
-                prop "reads really big generic arrays" $ withMaxSuccess 4 $ test_bigger_arrays_decoding 3
+                prop "reads bigger generic arrays" $ test_bigger_arrays_decoding 2
+                prop "reads really big generic arrays" $ withMaxSuccess 8 $ test_bigger_arrays_decoding 3
             describe "reads numbers" $ do
                 prop "reads small ints" $ forAll smallInt $ \num ->
                     toNums <$> readBin [1, 0x80 + num, 2] `shouldBe` Right [num]
@@ -36,24 +38,24 @@ spec = describe "BULK" $ do
                     toNums <$> readBin ([1, 0xC0 + lengthAsWord array] ++ array ++ [2]) `shouldBe` Right [unDigits array]
             describe "read references" $ do
                 prop "reads one-word marker references" $
-                    forAll anySimpleReference $ \(marker, ref) ->
+                    forAll anySimpleRefBytes $ \(marker, ref) ->
                         [marker, ref] `shouldParseTo` Reference (fromIntegral marker) (fromIntegral ref)
                 prop "reads two-words marker references" $
-                    forAll anySimpleReference $ \(marker, ref) ->
+                    forAll anySimpleRefBytes $ \(marker, ref) ->
                         [0x7F, marker, ref] `shouldParseTo` Reference (0x7F + fromIntegral marker) (fromIntegral ref)
                 prop "reads three-words marker references" $
-                    forAll anySimpleReference $ \(marker, ref) ->
+                    forAll anySimpleRefBytes $ \(marker, ref) ->
                         [0x7F, 0xFF, marker, ref] `shouldParseTo` Reference (0x7F + 0xFF + fromIntegral marker) (fromIntegral ref)
             it "rejects reserved markers" $
                 mapM_ (\marker -> readFails [marker, 0, 0, 0]) reservedMarkers
         describe "files" $ do
             it "reads simple files" $ do
                 readFile "test/nesting.bulk"
-                    `shouldReturn` Right (Form [bulk_v1_0, Form [], Form [Nil, Form [Nil], Form []]])
+                    `shouldReturn` Right (Form [version 1 0, Form [], Form [Nil, Form [Nil], Form []]])
                 readFile "test/primitives.bulk"
                     `shouldReturn` Right
                         ( Form
-                            [ bulk_v1_0
+                            [ version 1 0
                             , Form
                                 [ Nil
                                 , Array "Hello world!"
@@ -89,7 +91,18 @@ spec = describe "BULK" $ do
             map encodeInt [0, 1, 255, 256] `shouldBe` [Array [0], Array [1], Array [255], Array [1, 0]]
             encode [Array [0], Array [1], Array [255], Array [1, 0]] `shouldBe` [0x80, 0x81, 0xC1, 0xFF, 0xC2, 0x01, 0x00]
         prop "round-trips arbitrary primitives" $ \expr ->
-            encode [expr] `shouldParseBSTo` expr
+            encode [expr] `shouldParseTo` expr
+    describe "standard namespace" $ do
+        it "has basic references" $ do
+            version 1 0 `shouldBe` Form [Reference 16 0, Array [1], Array [0]]
+        prop "has self-evaluating expressions" $ \expr ->
+            eval [expr] `shouldBe` [expr]
+        prop "has definitions" $ do
+            rvs <- nubFst <$> listOf ((,) <$> anySimpleRef <*> arbitrary)
+            let refs = map fst rvs
+                values = map snd rvs
+                definitions = zipWith define refs values
+            pure $ eval (definitions ++ refs) `shouldBe` values
 
 reservedMarkers :: [Word8]
 reservedMarkers = [0x04 .. 0x0F]
@@ -97,7 +110,7 @@ reservedMarkers = [0x04 .. 0x0F]
 test_bigger_arrays_decoding :: Int -> Property
 test_bigger_arrays_decoding size =
     forAll (arraySizedWith size) $ \array ->
-        ([3, 0xC0 + fromIntegral size] ++ asWords size (length array) ++ array) `shouldParseTo` Array (pack array)
+        encode [array] `shouldParseTo` array
 
-bulk_v1_0 :: BULK
-bulk_v1_0 = Form [Reference 16 0, Array [1], Array [0]]
+nubFst :: (Eq a) => [(a, b)] -> [(a, b)]
+nubFst = nubBy ((==) `on` fst)

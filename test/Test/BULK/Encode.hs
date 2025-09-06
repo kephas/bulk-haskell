@@ -17,3 +17,7 @@ instance Arbitrary BULK where
             let restSize = n - headSize
             (:) <$> (Form <$> form (headSize - 1)) <*> form restSize
         ref = Reference <$> chooseInt (0x10, 0xFFFF) <*> chooseInt (0x00, 0xFF)
+    shrink Nil = []
+    shrink (Form exprs) = Form <$> shrink exprs
+    shrink (Array bs) = Array <$> shrink bs
+    shrink (Reference ns name) = Reference <$> shrink ns <*> shrink name

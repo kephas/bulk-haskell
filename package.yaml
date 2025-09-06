@@ -35,6 +35,7 @@ library:
     - largeword
     - binary
     - binary-parsers
+    - containers
     - extra
 
 tests:
