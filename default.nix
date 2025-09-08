@@ -1,14 +1,6 @@
-{ pkgs ? import (fetchTarball https://github.com/NixOS/nixpkgs/archive/refs/tags/22.11.tar.gz) {} }:
+{ pkgs ? import (fetchTarball https://github.com/NixOS/nixpkgs/archive/67d0da2b164cd4301464d7037f041f65238fd8e3.tar.gz) {} }:
 
-let hp2505 = (import (fetchTarball https://github.com/NixOS/nixpkgs/archive/refs/tags/25.05.tar.gz) {}).haskellPackages;
-    hp = pkgs.haskellPackages.override { overrides = self: super: { digits = hp2505.digits; }; };
-    hlib = pkgs.haskell.lib.compose;
-    compose = with pkgs.lib.trivial; flip pipe;
-in
-
-# missing dev.haskellPackages.digits
-hp.developPackage {
+pkgs.haskellPackages.developPackage {
   root = ./.;
-  modifier = compose [(hlib.addExtraLibrary hp.shake)
-                      (hlib.addBuildTools (with pkgs; [ shake haskell-language-server hlint ]))];
+  modifier = (pkgs.haskell.lib.compose.addBuildTools (with pkgs; [ cabal-install hpack haskell-language-server hlint ]));
 }

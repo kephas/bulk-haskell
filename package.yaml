@@ -23,6 +23,7 @@ dependencies:
 - bits
 - bytestring
 - digits
+- text
 
 language: Haskell2010
 
@@ -34,9 +35,9 @@ library:
   dependencies:
     - largeword
     - binary
-    - binary-parsers
     - containers
     - extra
+    - megaparsec
 
 tests:
   bulk-test:
@@ -55,3 +56,4 @@ tests:
     - quickcheck-instances
     - QuickCheck
     - random
+    - string-interpolate

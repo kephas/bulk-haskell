@@ -1,18 +1,19 @@
 module Test.BULK.Decode where
 
 import Control.Exception (ErrorCall, handle)
-import Data.BULK (BULK (Array, Form, Reference), VersionConstraint, getExpression, getStream, parseLazy, toIntegral)
 import Data.ByteString.Lazy (ByteString, pack)
 import Data.Digits qualified as D
 import Data.Either (isLeft)
 import Data.Functor (($>))
-import Data.Maybe (mapMaybe)
+import Data.Text (Text)
 import Data.Word (Word8)
 import System.Random (Random)
 import Test.Hspec
 import Test.QuickCheck (Gen, arbitrary, choose, listOf, resize)
 import Test.QuickCheck.Instances.ByteString ()
 import Prelude hiding (words)
+
+import Data.BULK (BULK (Array, Form, Reference), VersionConstraint (SetVersion), getExpression, getStream, parseLazy, parseTextNotation, toIntegral)
 
 readBin :: [Word8] -> Either String BULK
 readBin = parseLazy getExpression . pack
@@ -26,12 +27,15 @@ readFails words = isLeft (readBin words) `shouldBe` True
 shouldParseTo :: ByteString -> BULK -> Expectation
 words `shouldParseTo` expr = parseLazy getExpression words `shouldBe` Right expr
 
-shouldParseBSTo :: ByteString -> BULK -> Expectation
-words `shouldParseBSTo` expr = parseLazy getExpression words `shouldBe` Right expr
+shouldDenote :: Text -> [BULK] -> Expectation
+text `shouldDenote` list = (parseTextNotation text >>= parseLazy (getStream $ SetVersion 1 0)) `shouldBe` Right (Form list)
 
-toNums :: (Integral a) => BULK -> [a]
-toNums (Form exprs) = mapMaybe toIntegral exprs
-toNums _ = error "not a form"
+readNum :: (Integral a) => [Word8] -> Either String a
+readNum words =
+    readBin words >>= maybeToEither "not a number" . toIntegral
+
+maybeToEither :: a -> Maybe b -> Either a b
+maybeToEither nothing = maybe (Left nothing) Right
 
 unDigits :: [Word8] -> Integer
 unDigits = D.unDigits 256 . map fromIntegral

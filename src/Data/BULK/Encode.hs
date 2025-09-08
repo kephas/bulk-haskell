@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedLists #-}
 
-module Data.BULK.Encode (encode, encodeInt)
+module Data.BULK.Encode (encode, encodeInt, encodeExpr)
 where
 
 import Data.BULK.Decode (BULK (..))

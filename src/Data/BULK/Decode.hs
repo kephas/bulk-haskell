@@ -10,12 +10,12 @@ module Data.BULK.Decode (
 ) where
 
 import Data.Binary.Get
-import Data.Binary.Parser (parseLazy)
 import Data.Bits (Bits, (.&.))
 import Data.Bool (bool)
 import Data.ByteString.Lazy (ByteString)
 import Data.ByteString.Lazy qualified as BL
 import Data.Either.Extra (eitherToMaybe)
+import Data.Void (absurd)
 import Data.Word (
     Word8,
  )
@@ -37,11 +37,11 @@ data BULK
 data Syntax = FormEnd
 
 -- | Version specification
-data VersionConstraint = InStream | Version Int Int
+data VersionConstraint = ReadVersion | SetVersion Int Int
 
 -- | Read an entire file as a BULK stream
 readFile :: FilePath -> IO (Either String BULK)
-readFile = readFileWithVersion InStream
+readFile = readFileWithVersion ReadVersion
 
 readFileWithVersion :: VersionConstraint -> FilePath -> IO (Either String BULK)
 readFileWithVersion version path = parseLazy (getStream version) <$> BL.readFile path
@@ -108,9 +108,9 @@ getExpression = getNext >>= either (const $ fail "form end at top level") pure
 
 -- | Get action to read an entire BULK stream
 getStream :: VersionConstraint -> Get BULK
-getStream (Version 1 0) = getSequence AtTopLevel
-getStream (Version _ _) = fail "this application only supports BULK version 1.0"
-getStream InStream = do
+getStream (SetVersion 1 0) = getSequence AtTopLevel
+getStream (SetVersion _ _) = fail "this application only supports BULK version 1.0"
+getStream ReadVersion = do
     result@(Form (first : rest)) <- getSequence AtTopLevel
     case first of
         Form [Reference 16 0, Array major, Array minor]
@@ -138,3 +138,10 @@ with2bitPrefix prefix byte =
     if byte .&. 0xC0 == prefix
         then Just $ fromIntegral $ byte .&. 0x3F
         else Nothing
+
+parseLazy :: Get a -> ByteString -> Either String a
+parseLazy get input =
+    case pushEndOfInput $ runGetIncremental get `pushChunks` input of
+        Fail _unconsumed _offset err -> Left err
+        Done _unconsumed _offset result -> Right result
+        Partial _k -> Left "Impossible: parser wasn't failed or done after end of input!"

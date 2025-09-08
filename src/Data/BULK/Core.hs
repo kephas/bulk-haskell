@@ -1,4 +1,4 @@
-module Data.BULK.Std where
+module Data.BULK.Core where
 
 import Data.BULK.Decode (BULK (Form, Reference))
 import Data.BULK.Encode (encodeInt)
