@@ -17,21 +17,30 @@ import Data.Ord (Down (..))
 import Data.Set (elems)
 import Data.Text (Text)
 import Data.Text qualified as T
+import Data.Text.Encoding.Error (OnDecodeError, lenientDecode)
 import Data.Text.Lazy qualified as LT
-import Data.Text.Lazy.Encoding qualified as LT
+import Data.Text.Lazy.Encoding qualified as LTE
 import Data.Void (Void)
 import Data.Word (Word8)
 import Text.Megaparsec (ErrorFancy (ErrorFail), MonadParsec (..), ParseError (FancyError), ParseErrorBundle (..), Parsec, ShowErrorComponent (..), TraversableStream, VisualStream, anySingleBut, choice, chunk, errorBundlePretty, many, match, noneOf, oneOf, optional, parseMaybe, runParser, satisfy, single, some, (<|>))
 import Text.Megaparsec.Char (space)
 import Text.Megaparsec.Char.Lexer qualified as L
 
-import Data.BULK.Decode (BULK (..))
+import Data.BULK.Decode (BULK (..), VersionConstraint (ReadVersion), getStream, parseLazy)
 import Data.BULK.Encode (encodeExpr, encodeInt)
 
 parseTextNotation :: Text -> Either String ByteString
 parseTextNotation source = do
     lexemes <- tryParser lexer source
     BB.toLazyByteString . mconcat <$> traverse parseTextToken lexemes
+
+parseTextFile :: FilePath -> IO (Either String BULK)
+parseTextFile = parseTextFileWith lenientDecode ReadVersion
+
+parseTextFileWith :: OnDecodeError -> VersionConstraint -> FilePath -> IO (Either String BULK)
+parseTextFileWith onerror constraint file = do
+    bytes <- B.readFile file
+    pure $ parseTextNotation (LT.toStrict $ LTE.decodeUtf8With onerror bytes) >>= parseLazy (getStream constraint)
 
 lexer :: Parser [Text]
 lexer =
@@ -50,8 +59,6 @@ parseTextToken "nil" = w8 0
 parseTextToken "(" = w8 1
 parseTextToken ")" = w8 2
 parseTextToken token = tryParser tokenP token
-
--- parseTextToken bad = Left $ "not a reckognized token: " <> T.unpack bad
 
 w8 :: (Applicative f) => Word8 -> f BB.Builder
 w8 = pure . BB.word8
@@ -108,7 +115,7 @@ quotedStringP = do
 
 stringP :: Parser BB.Builder
 stringP =
-    encodeExpr . Array . LT.encodeUtf8 . LT.fromStrict <$> stringSyntaxP
+    encodeExpr . Array . LTE.encodeUtf8 . LT.fromStrict <$> stringSyntaxP
 
 coreP :: Parser BB.Builder
 coreP = optional (chunk "bulk:") >> choice parsers

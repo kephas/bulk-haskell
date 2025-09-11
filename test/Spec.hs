@@ -24,6 +24,8 @@ main = hspec spec
 
 spec :: SpecWith ()
 spec = describe "BULK" $ do
+    --
+    -- Decoding
     describe "decoding" $ do
         describe "primitives" $ do
             it "reads simple forms" $ do
@@ -55,31 +57,10 @@ spec = describe "BULK" $ do
                 mapM_ (\marker -> readFails [marker, 0, 0, 0]) reservedMarkers
         describe "files" $ do
             it "reads simple files" $ do
-                readFile "test/nesting.bulk"
-                    `shouldReturn` Right (Form [version 1 0, Form [], Form [Nil, Form [Nil], Form []]])
-                readFile "test/primitives.bulk"
-                    `shouldReturn` Right
-                        ( Form
-                            [ version 1 0
-                            , Form
-                                [ Nil
-                                , Array "Hello world!"
-                                , Array [0x2A]
-                                , Array []
-                                , Array [0x40]
-                                , Array [0x01, 0x00]
-                                , Array [0x01, 0x00, 0x00, 0x00]
-                                , Array [0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF]
-                                , Reference 0x18 0x01
-                                , Reference 0x18 0x02
-                                , Reference 0x7E 0xFF
-                                , Reference (0x7F + 0xFF + 0xBC) 0x1A
-                                ]
-                            ]
-                        )
+                readFile "test/nesting.bulk" `shouldReturn` nesting
+                readFile "test/primitives.bulk" `shouldReturn` primitives
             it "reports bad syntax" $ do
-                readFile "test/bad nesting.bulk"
-                    `shouldReturn` Left "not enough data (while reading a form)"
+                readFile "test/bad nesting.bulk" `shouldReturn` badNesting
             it "checks for version 1.0" $ do
                 readFile "test/missing version.bulk" `shouldReturn` Left "missing version"
                 readFileWithVersion (SetVersion 1 0) "test/missing version.bulk" `shouldReturn` Right (Form [Nil])
@@ -89,6 +70,8 @@ spec = describe "BULK" $ do
                 readBinStream ReadVersion [0] `shouldBe` Left "missing version"
                 readBinStream (SetVersion 1 0) [0] `shouldBe` Right (Form [Nil])
                 readBinStream (SetVersion 1 1) [0] `shouldBe` Left "this application only supports BULK version 1.0"
+    --
+    -- Encoding
     describe "encoding" $ do
         it "encodes primitives" $ do
             encode [Nil, Form [], Array [], Reference 16 0] `shouldBe` [0, 1, 2, 0xC0, 16, 0]
@@ -97,6 +80,8 @@ spec = describe "BULK" $ do
             encode [Array [0], Array [1], Array [255], Array [1, 0]] `shouldBe` [0x80, 0x81, 0xC1, 0xFF, 0xC2, 0x01, 0x00]
         prop "round-trips arbitrary primitives" $ \expr ->
             encode [expr] `shouldParseTo` expr
+    --
+    -- Text Notation
     describe "text notation" $ do
         it "parses notation" $ do
             "nil" `shouldDenote` [Nil]
@@ -124,7 +109,13 @@ spec = describe "BULK" $ do
             parseTextNotation [i|"foo" "quuux"|] `shouldBe` Right "\xC3\&foo\xC5quuux"
             parseTextNotation [i|"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor"|] `shouldBe` Right "\x03\xC1\78Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor"
             parseTextNotation [i|"関数型プログラミング"|] `shouldBe` Right [0xDE, 233, 150, 162, 230, 149, 176, 229, 158, 139, 227, 131, 151, 227, 131, 173, 227, 130, 176, 227, 131, 169, 227, 131, 159, 227, 131, 179, 227, 130, 176]
-    describe "standard namespace" $ do
+        it "parses example files" $ do
+            parseTextFile "test/nesting.bulktext" `shouldReturn` nesting
+            parseTextFile "test/primitives.bulktext" `shouldReturn` primitives
+            parseTextFile "test/bad nesting.bulktext" `shouldReturn` badNesting
+    --
+    -- Core namespace and evaluation
+    describe "core namespace" $ do
         it "has basic references" $ do
             version 1 0 `shouldBe` Form [Reference 16 0, Array [1], Array [0]]
         prop "has self-evaluating expressions" $ \expr ->
@@ -135,6 +126,30 @@ spec = describe "BULK" $ do
                 values = map snd rvs
                 definitions = zipWith define refs values
             pure $ eval (definitions ++ refs) `shouldBe` values
+
+nesting, primitives, badNesting :: Either String BULK
+nesting = Right (Form [version 1 0, Form [], Form [Nil, Form [Nil], Form []]])
+primitives =
+    Right
+        ( Form
+            [ version 1 0
+            , Form
+                [ Nil
+                , Array "Hello world!"
+                , Array [0x2A]
+                , Array []
+                , Array [0x40]
+                , Array [0x01, 0x00]
+                , Array [0x01, 0x00, 0x00, 0x00]
+                , Array [0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF]
+                , Reference 0x18 0x01
+                , Reference 0x18 0x02
+                , Reference 0x7E 0xFF
+                , Reference (0x7F + 0xFF + 0xBC) 0x1A
+                ]
+            ]
+        )
+badNesting = Left "not enough data (while reading a form)"
 
 reservedMarkers :: [Word8]
 reservedMarkers = [0x04 .. 0x0F]
