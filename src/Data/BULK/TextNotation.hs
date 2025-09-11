@@ -1,6 +1,5 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE PatternSynonyms #-}
 
 module Data.BULK.TextNotation where
 
@@ -9,6 +8,7 @@ import Data.Bits ((.|.))
 import Data.ByteString.Builder qualified as BB
 import Data.ByteString.Lazy (ByteString)
 import Data.ByteString.Lazy qualified as B
+import Data.Char (isSpace)
 import Data.Functor (($>))
 import Data.List (sortOn)
 import Data.List qualified as List
@@ -21,7 +21,7 @@ import Data.Text.Lazy qualified as LT
 import Data.Text.Lazy.Encoding qualified as LT
 import Data.Void (Void)
 import Data.Word (Word8)
-import Text.Megaparsec (ErrorFancy (ErrorFail), MonadParsec (..), ParseError (FancyError), ParseErrorBundle (..), Parsec, ShowErrorComponent (..), TraversableStream, VisualStream, anySingleBut, choice, chunk, errorBundlePretty, many, match, noneOf, oneOf, optional, parseMaybe, runParser, single, some, (<|>))
+import Text.Megaparsec (ErrorFancy (ErrorFail), MonadParsec (..), ParseError (FancyError), ParseErrorBundle (..), Parsec, ShowErrorComponent (..), TraversableStream, VisualStream, anySingleBut, choice, chunk, errorBundlePretty, many, match, noneOf, oneOf, optional, parseMaybe, runParser, satisfy, single, some, (<|>))
 import Text.Megaparsec.Char (space)
 import Text.Megaparsec.Char.Lexer qualified as L
 
@@ -43,7 +43,7 @@ lexer =
         (lexeme :) <$> lexer
 
 tokenSyntaxP :: Parser Text
-tokenSyntaxP = fmap fst $ match $ some $ noneOf [' ', '"']
+tokenSyntaxP = fmap fst $ match $ some $ satisfy $ not . isSpace
 
 parseTextToken :: Text -> Either String BB.Builder
 parseTextToken "nil" = w8 0
