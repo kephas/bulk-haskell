@@ -31,7 +31,7 @@ import Data.BULK.Encode (encodeExpr, encodeInt)
 
 parseTextNotation :: Text -> Either String ByteString
 parseTextNotation source = do
-    lexemes <- tryParser lexer source
+    lexemes <- tryParser lexerP source
     BB.toLazyByteString . mconcat <$> traverse parseTextToken lexemes
 
 parseTextFile :: FilePath -> IO (Either String BULK)
@@ -42,14 +42,19 @@ parseTextFileWith onerror constraint file = do
     bytes <- B.readFile file
     pure $ parseTextNotation (LT.toStrict $ LTE.decodeUtf8With onerror bytes) >>= parseLazy (getStream constraint)
 
-lexer :: Parser [Text]
-lexer =
+type Parser = Parsec String Text
+
+tryParser :: Parser a -> Text -> Either String a
+tryParser parser = first showFail . runParser parser "-"
+
+lexerP :: Parser [Text]
+lexerP =
     try atLeastOne <|> pure []
   where
     atLeastOne :: Parser [Text]
     atLeastOne = do
         lexeme <- (quotedStringP <|> tokenSyntaxP) <* space
-        (lexeme :) <$> lexer
+        (lexeme :) <$> lexerP
 
 tokenSyntaxP :: Parser Text
 tokenSyntaxP = fmap fst $ match $ some $ satisfy $ not . isSpace
@@ -62,11 +67,6 @@ parseTextToken token = tryParser tokenP token
 
 w8 :: (Applicative f) => Word8 -> f BB.Builder
 w8 = pure . BB.word8
-
-type Parser = Parsec String Text
-
-tryParser :: Parser a -> Text -> Either String a
-tryParser parser = first showFail . runParser parser "-"
 
 tokenP :: Parser BB.Builder
 tokenP = (smallIntP <|> smallArrayP <|> literalBytesP <|> decimalP <|> stringP <|> try coreP) <* eof
