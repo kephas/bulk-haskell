@@ -23,6 +23,7 @@ dependencies:
 - bits
 - bytestring
 - digits
+- string-interpolate
 - text
 
 language: Haskell2010
@@ -38,6 +39,7 @@ library:
     - containers
     - extra
     - megaparsec
+    - mtl
 
 executables:
   bulk-cli:
@@ -71,4 +73,3 @@ tests:
     - quickcheck-instances
     - QuickCheck
     - random
-    - string-interpolate

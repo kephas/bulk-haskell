@@ -47,6 +47,8 @@ library
     , extra
     , largeword
     , megaparsec
+    , mtl
+    , string-interpolate
     , text
   default-language: Haskell2010
 
@@ -68,6 +70,7 @@ executable bulk-cli
     , filepath
     , optparse-simple
     , relude
+    , string-interpolate
     , text
   default-language: Haskell2010
 

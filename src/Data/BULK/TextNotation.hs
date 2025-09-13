@@ -1,8 +1,14 @@
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE NoFieldSelectors #-}
 
 module Data.BULK.TextNotation where
 
+import Control.Monad.State (MonadState (..), State, evalState, gets, modify, runState)
 import Data.Bifunctor (first)
 import Data.Bits ((.|.))
 import Data.ByteString.Builder qualified as BB
@@ -13,8 +19,11 @@ import Data.Functor (($>))
 import Data.List (sortOn)
 import Data.List qualified as List
 import Data.List.NonEmpty (NonEmpty ((:|)))
+import Data.Map (Map)
+import Data.Map qualified as M
 import Data.Ord (Down (..))
 import Data.Set (elems)
+import Data.String.Interpolate (i)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding.Error (OnDecodeError, lenientDecode)
@@ -22,17 +31,25 @@ import Data.Text.Lazy qualified as LT
 import Data.Text.Lazy.Encoding qualified as LTE
 import Data.Void (Void)
 import Data.Word (Word8)
-import Text.Megaparsec (ErrorFancy (ErrorFail), MonadParsec (..), ParseError (FancyError), ParseErrorBundle (..), Parsec, ShowErrorComponent (..), TraversableStream, VisualStream, anySingleBut, choice, chunk, errorBundlePretty, many, match, noneOf, oneOf, optional, parseMaybe, runParser, satisfy, single, some, (<|>))
+import Text.Megaparsec (ErrorFancy (ErrorFail), MonadParsec (..), ParseError (FancyError), ParseErrorBundle (..), Parsec, ParsecT, ShowErrorComponent (..), TraversableStream, VisualStream, anySingleBut, choice, chunk, errorBundlePretty, many, match, noneOf, oneOf, optional, parseMaybe, runParserT, satisfy, single, some, takeRest, (<|>))
 import Text.Megaparsec.Char (space)
 import Text.Megaparsec.Char.Lexer qualified as L
 
 import Data.BULK.Decode (BULK (..), VersionConstraint (ReadVersion), getStream, parseLazy)
 import Data.BULK.Encode (encodeExpr, encodeInt)
+import Data.Maybe (fromMaybe)
+
+data Namespace = Namespace {marker :: Int, usedNames :: Map Text Int, availableNames :: [Int]}
+
+data NamespaceMap = NamespaceMap {usedNamespaces :: Map Text Namespace, nextMarker :: Int}
+
+type Parser = ParsecT String Text (State NamespaceMap)
 
 parseTextNotation :: Text -> Either String ByteString
 parseTextNotation source = do
-    lexemes <- tryParser lexerP source
-    BB.toLazyByteString . mconcat <$> traverse parseTextToken lexemes
+    lexemes <- runParser showFail lexerP source
+    builders <- flip evalState bulkProfile $ sequence <$> traverse parseTextToken lexemes
+    pure $ BB.toLazyByteString $ mconcat builders
 
 parseTextFile :: FilePath -> IO (Either String BULK)
 parseTextFile = parseTextFileWith lenientDecode ReadVersion
@@ -42,10 +59,10 @@ parseTextFileWith onerror constraint file = do
     bytes <- B.readFile file
     pure $ parseTextNotation (LT.toStrict $ LTE.decodeUtf8With onerror bytes) >>= parseLazy (getStream constraint)
 
-type Parser = Parsec String Text
-
-tryParser :: Parser a -> Text -> Either String a
-tryParser parser = first showFail . runParser parser "-"
+bulkProfile :: NamespaceMap
+bulkProfile = NamespaceMap{usedNamespaces = M.singleton "bulk" Namespace{marker = 0x10, usedNames = coreNames, availableNames = []}, nextMarker = 0x18}
+  where
+    coreNames = M.fromList $ zip (T.words "version true false stringenc iana-charset codepage ns package import define mnemonic/def ns-mnemonic verifiable-ns concat subst arg rest unsigned-int signed-int fraction binary-float decimal-float binary-fixed decimal-fixed decimal2 prefix prefix* postfix postfix* arity") ([0x0 .. 0xC] ++ [0x10 .. 0x13] ++ [0x20 .. 0x27] ++ [0x30 .. 0x34])
 
 lexerP :: Parser [Text]
 lexerP =
@@ -59,17 +76,17 @@ lexerP =
 tokenSyntaxP :: Parser Text
 tokenSyntaxP = fmap fst $ match $ some $ satisfy $ not . isSpace
 
-parseTextToken :: Text -> Either String BB.Builder
-parseTextToken "nil" = w8 0
-parseTextToken "(" = w8 1
-parseTextToken ")" = w8 2
-parseTextToken token = tryParser tokenP token
+parseTextToken :: Text -> State NamespaceMap (Either String BB.Builder)
+parseTextToken "nil" = pure $ w8 0
+parseTextToken "(" = pure $ w8 1
+parseTextToken ")" = pure $ w8 2
+parseTextToken token = runParserM showFail tokenP token
 
 w8 :: (Applicative f) => Word8 -> f BB.Builder
 w8 = pure . BB.word8
 
 tokenP :: Parser BB.Builder
-tokenP = (smallIntP <|> smallArrayP <|> literalBytesP <|> decimalP <|> stringP <|> try coreP) <* eof
+tokenP = (smallIntP <|> smallArrayP <|> literalBytesP <|> decimalP <|> stringP <|> try coreP <|> try referenceP) <* eof
 
 smallIntP :: Parser BB.Builder
 smallIntP = do
@@ -117,11 +134,53 @@ stringP :: Parser BB.Builder
 stringP =
     encodeExpr . Array . LTE.encodeUtf8 . LT.fromStrict <$> stringSyntaxP
 
+referenceP :: Parser BB.Builder
+referenceP = qualified <|> unqualified
+  where
+    qualified = do
+        ns <- T.pack <$> some (anySingleBut ':')
+        single ':'
+        name <- takeRest
+        ref <- ensureRef ns name
+        pure $ encodeExpr ref
+    unqualified = do
+        name <- takeRest
+        ref <- ensureRef "<empty>" name
+        pure $ encodeExpr ref
+
+ensureRef :: Text -> Text -> Parser BULK
+ensureRef nsMnemonic nameMnemonic = do
+    ns <- ensureNamespace
+    name <- ensureName ns
+    pure $ Reference ns.marker name
+  where
+    ensureNamespace :: Parser Namespace
+    ensureNamespace = do
+        mNs <- gets lookupNS
+        maybe createNamespace pure mNs
+    ensureName :: Namespace -> Parser Int
+    ensureName ns = maybe (createName ns) pure $ M.lookup nameMnemonic ns.usedNames
+    lookupNS :: NamespaceMap -> Maybe Namespace
+    lookupNS nss = M.lookup nsMnemonic nss.usedNamespaces
+    createNamespace = do
+        nss <- get
+        let marker = nss.nextMarker
+            newNamespace = Namespace{marker = marker, usedNames = M.empty, availableNames = [0 .. 255]}
+        put nss{usedNamespaces = M.insert nsMnemonic newNamespace nss.usedNamespaces, nextMarker = marker + 1}
+        pure newNamespace
+    createName :: Namespace -> Parser Int
+    createName ns = case ns.availableNames of
+        (nextName : otherNames) -> do
+            let ns' = ns{usedNames = M.insert nameMnemonic nextName ns.usedNames, availableNames = otherNames}
+            modify $ \nss -> nss{usedNamespaces = M.insert nsMnemonic ns' nss.usedNamespaces}
+            pure nextName
+        [] -> fail [i|no space available for #{nsMnemonic}:#{nameMnemonic}|]
+
 coreP :: Parser BB.Builder
 coreP = optional (chunk "bulk:") >> choice parsers
   where
     -- they need to be sorted in reverse to try the longer ones before their prefix (e.g. try foo* before foo)
-    parsers = map mkParser $ sortOn (Down . fst) $ zip (T.words "version true false stringenc iana-charset codepage ns package import define mnemonic/def ns-mnemonic verifiable-ns concat subst arg rest unsigned-int signed-int fraction binary-float decimal-float binary-fixed decimal-fixed decimal2 prefix-bytecode prefix-bytecode* postfix-bytecode postfix-bytecode* arity") ([0x0 .. 0xC] ++ [0x10 .. 0x13] ++ [0x20 .. 0x27] ++ [0x30 .. 0x34])
+    parsers = map mkParser $ sortOn (Down . fst) $ zip (T.words "version true false stringenc iana-charset codepage ns package import define mnemonic/def ns-mnemonic verifiable-ns concat subst arg rest unsigned-int signed-int fraction binary-float decimal-float binary-fixed decimal-fixed decimal2 prefix prefix* postfix postfix* arity") ([0x0 .. 0xC] ++ [0x10 .. 0x13] ++ [0x20 .. 0x27] ++ [0x30 .. 0x34])
     mkParser (mnemonic, num) = try $ chunk mnemonic $> (BB.word8 0x10 <> BB.word8 num)
 
 instance ShowErrorComponent [Char] where
@@ -156,6 +215,15 @@ testP = choice (zipWith mkParser ["foo-bar", "foo"] [1, 2]) <* eof
   where
     mkParser text int = try $ chunk text $> int
 
+runParser :: (ParseErrorBundle Text String -> String) -> Parser a -> Text -> Either String a
+runParser mapError parser =
+    first mapError . flip evalState bulkProfile . runParserT parser "-"
+
+runParserM :: (MonadState NamespaceMap m) => (ParseErrorBundle Text String -> String) -> Parser a -> Text -> m (Either String a)
+runParserM mapError parser text = do
+    result <- state $ runState $ runParserT parser "-" text
+    pure $ first mapError result
+
 debugParse :: (Show a) => Parser a -> Text -> IO ()
 debugParse parser text = do
-    putStrLn $ either errorBundlePretty show (runParser parser "-" text)
+    putStrLn $ either id show (runParser errorBundlePretty parser text)

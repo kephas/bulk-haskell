@@ -113,6 +113,8 @@ spec = describe "BULK" $ do
             parseTextFile "test/nesting.bulktext" `shouldReturn` nesting
             parseTextFile "test/primitives.bulktext" `shouldReturn` primitives
             parseTextFile "test/bad nesting.bulktext" `shouldReturn` badNesting
+        it "parses unknown references" $ do
+            "foo:bar quux:one foo:baz" `shouldDenote` (uncurry Reference <$> [(24, 0), (25, 0), (24, 1)])
     --
     -- Core namespace and evaluation
     describe "core namespace" $ do
