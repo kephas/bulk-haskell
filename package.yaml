@@ -23,6 +23,7 @@ dependencies:
 - bits
 - bytestring
 - digits
+- lens
 - string-interpolate
 - text
 

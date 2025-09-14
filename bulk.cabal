@@ -30,6 +30,7 @@ library
       Data.BULK.Decode
       Data.BULK.Encode
       Data.BULK.Eval
+      Data.BULK.Lens
       Data.BULK.TextNotation
   other-modules:
       Paths_bulk
@@ -46,6 +47,7 @@ library
     , digits
     , extra
     , largeword
+    , lens
     , megaparsec
     , mtl
     , string-interpolate
@@ -68,6 +70,7 @@ executable bulk-cli
     , bytestring
     , digits
     , filepath
+    , lens
     , optparse-simple
     , relude
     , string-interpolate
@@ -95,6 +98,7 @@ test-suite bulk-test
     , bytestring
     , digits
     , hspec
+    , lens
     , quickcheck-instances
     , random
     , string-interpolate

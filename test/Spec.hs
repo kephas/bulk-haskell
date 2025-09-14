@@ -4,7 +4,6 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# OPTIONS_GHC -Wno-type-defaults #-}
 
-import Data.BULK
 import Data.ByteString.Lazy (cons, pack, singleton)
 import Data.Foldable (for_)
 import Data.Function (on)
@@ -16,6 +15,7 @@ import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck (Property, arbitrary, chooseInt, forAll, listOf, withMaxSuccess)
 import Prelude hiding (readFile)
 
+import Data.BULK
 import Test.BULK.Decode
 import Test.BULK.Encode ()
 
@@ -40,9 +40,9 @@ spec = describe "BULK" $ do
                 prop "reads really big generic arrays" $ withMaxSuccess 8 $ test_bigger_arrays_decoding 3
             describe "reads numbers" $ do
                 prop "reads small ints" $ forAll smallInt $ \num ->
-                    readNum [0x80 + num] `shouldBe` Right num
+                    [0x80 + num] `shouldParseToNum` num
                 prop "reads ints in small arrays" $ forAll smallArray $ \array ->
-                    readNum ((0xC0 + lengthAsWord array) : array) `shouldBe` Right (unDigits array)
+                    ((0xC0 + lengthAsWord array) : array) `shouldParseToNum` unDigits array
             describe "read references" $ do
                 prop "reads one-word marker references" $
                     forAll anySimpleRefBytes $ \(marker, ref) ->
@@ -54,7 +54,7 @@ spec = describe "BULK" $ do
                     forAll anySimpleRefBytes $ \(marker, ref) ->
                         [0x7F, 0xFF, marker, ref] `shouldParseTo` Reference (0x7F + 0xFF + fromIntegral marker) (fromIntegral ref)
             it "rejects reserved markers" $
-                mapM_ (\marker -> readFails [marker, 0, 0, 0]) reservedMarkers
+                mapM_ readFailsOn reservedMarkers
         describe "files" $ do
             it "reads simple files" $ do
                 readFile "test/nesting.bulk" `shouldReturn` nesting

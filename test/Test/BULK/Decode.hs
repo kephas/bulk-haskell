@@ -1,6 +1,7 @@
 module Test.BULK.Decode where
 
 import Control.Exception (ErrorCall, handle)
+import Control.Lens
 import Data.ByteString.Lazy (ByteString, pack)
 import Data.Digits qualified as D
 import Data.Either (isLeft)
@@ -13,7 +14,7 @@ import Test.QuickCheck (Gen, arbitrary, choose, listOf, resize)
 import Test.QuickCheck.Instances.ByteString ()
 import Prelude hiding (words)
 
-import Data.BULK (BULK (Array, Form, Reference), VersionConstraint (SetVersion), getExpression, getStream, parseLazy, parseTextNotation, toIntegral)
+import Data.BULK (BULK (Array, Form, Reference), VersionConstraint (SetVersion), getExpression, getStream, parseLazy, parseTextNotation, _Bulk, _Int)
 
 readBin :: [Word8] -> Either String BULK
 readBin = parseLazy getExpression . pack
@@ -21,21 +22,17 @@ readBin = parseLazy getExpression . pack
 readBinStream :: VersionConstraint -> [Word8] -> Either String BULK
 readBinStream version = parseLazy (getStream version) . pack
 
-readFails :: [Word8] -> Expectation
-readFails words = isLeft (readBin words) `shouldBe` True
+readFailsOn :: Word8 -> Expectation
+readFailsOn word = isLeft (readBin [word]) `shouldBe` True
 
 shouldParseTo :: ByteString -> BULK -> Expectation
 words `shouldParseTo` expr = parseLazy getExpression words `shouldBe` Right expr
 
+shouldParseToNum :: (Integral a, Eq a, Show a) => [Word8] -> a -> Expectation
+words `shouldParseToNum` num = words ^? _Bulk . _Int `shouldBe` Just num
+
 shouldDenote :: Text -> [BULK] -> Expectation
 text `shouldDenote` list = (parseTextNotation text >>= parseLazy (getStream $ SetVersion 1 0)) `shouldBe` Right (Form list)
-
-readNum :: (Integral a) => [Word8] -> Either String a
-readNum words =
-    readBin words >>= maybeToEither "not a number" . toIntegral
-
-maybeToEither :: a -> Maybe b -> Either a b
-maybeToEither nothing = maybe (Left nothing) Right
 
 unDigits :: [Word8] -> Integer
 unDigits = D.unDigits 256 . map fromIntegral
