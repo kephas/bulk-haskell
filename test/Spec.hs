@@ -102,8 +102,8 @@ spec = describe "BULK" $ do
             [i|#{num}|] `shouldDenote` [encodeInt num]
         it "parses bulk core references" $ do
             "version" `shouldDenote` [Reference 16 0]
-            "( version 1 0 ) true false ( define 0x1800 ( subst ( concat ( arg 1 ) ( arg 2 ) ) ) )" `shouldDenote` [version 1 0, core 1, core 2, Form [core 9, Reference 24 0, Form [core 0x11, Form [core 0x10, Form [core 0x12, Array [1]], Form [core 0x12, Array [2]]]]]]
-            "( bulk:ns 0x1800 #[4] 0x0011-2233 ) ( bulk:ns-mnemonic 0x1800 )" `shouldDenote` [Form [core 6, Reference 24 0, Array "\x00\x11\x22\x33"], Form [core 0xB, Reference 24 0]]
+            "( version 1 0 ) true false ( define 0x1800 ( subst ( concat ( arg 1 ) ( arg 2 ) ) ) )" `shouldDenote` [version 1 0, core 1, core 2, Form [core 6, Reference 24 0, Form [core 0x0B, Form [core 0x0A, Form [core 0x0C, Array [1]], Form [core 0x0C, Array [2]]]]]]
+            "( bulk:ns 0x1800 #[4] 0x0011-2233 ) ( bulk:ns-mnemonic 0x1800 )" `shouldDenote` [Form [core 3, Reference 24 0, Array "\x00\x11\x22\x33"], Form [core 8, Reference 24 0]]
         it "parses UTF-8 strings" $ do
             parseTextNotation [i|"foo"|] `shouldBe` Right "\xC3\&foo"
             parseTextNotation [i|"foo" "quuux"|] `shouldBe` Right "\xC3\&foo\xC5quuux"

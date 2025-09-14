@@ -59,10 +59,13 @@ parseTextFileWith onerror constraint file = do
     bytes <- B.readFile file
     pure $ parseTextNotation (LT.toStrict $ LTE.decodeUtf8With onerror bytes) >>= parseLazy (getStream constraint)
 
+bulkCoreNames :: (Integral a) => [(Text, a)]
+bulkCoreNames = zip (T.words "version true false ns package import define mnemonic/def ns-mnemonic verifiable-ns concat subst arg rest stringenc iana-charset codepage string string* blob nested-bulk unsigned-int signed-int fraction binary-float decimal-float binary-fixed decimal-fixed decimal2 prefix prefix* postfix postfix* arity") ([0x0 .. 0xD] ++ [0x10 .. 0x16] ++ [0x20 .. 0x27] ++ [0x30 .. 0x34])
+
 bulkProfile :: NamespaceMap
 bulkProfile = NamespaceMap{usedNamespaces = M.singleton "bulk" Namespace{marker = 0x10, usedNames = coreNames, availableNames = []}, nextMarker = 0x18}
   where
-    coreNames = M.fromList $ zip (T.words "version true false stringenc iana-charset codepage ns package import define mnemonic/def ns-mnemonic verifiable-ns concat subst arg rest unsigned-int signed-int fraction binary-float decimal-float binary-fixed decimal-fixed decimal2 prefix prefix* postfix postfix* arity") ([0x0 .. 0xC] ++ [0x10 .. 0x13] ++ [0x20 .. 0x27] ++ [0x30 .. 0x34])
+    coreNames = M.fromList bulkCoreNames
 
 lexerP :: Parser [Text]
 lexerP =
@@ -180,7 +183,7 @@ coreP :: Parser BB.Builder
 coreP = optional (chunk "bulk:") >> choice parsers
   where
     -- they need to be sorted in reverse to try the longer ones before their prefix (e.g. try foo* before foo)
-    parsers = map mkParser $ sortOn (Down . fst) $ zip (T.words "version true false stringenc iana-charset codepage ns package import define mnemonic/def ns-mnemonic verifiable-ns concat subst arg rest unsigned-int signed-int fraction binary-float decimal-float binary-fixed decimal-fixed decimal2 prefix prefix* postfix postfix* arity") ([0x0 .. 0xC] ++ [0x10 .. 0x13] ++ [0x20 .. 0x27] ++ [0x30 .. 0x34])
+    parsers = map mkParser $ sortOn (Down . fst) bulkCoreNames
     mkParser (mnemonic, num) = try $ chunk mnemonic $> (BB.word8 0x10 <> BB.word8 num)
 
 instance ShowErrorComponent [Char] where
