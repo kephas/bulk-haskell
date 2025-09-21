@@ -14,7 +14,7 @@ import Test.QuickCheck (Gen, arbitrary, choose, listOf, resize)
 import Test.QuickCheck.Instances.ByteString ()
 import Prelude hiding (words)
 
-import Data.BULK (BULK (Array, Form, Reference), VersionConstraint (SetVersion), getExpression, getStream, parseLazy, parseTextNotation, _Bulk, _Int)
+import Data.BULK (BULK (Array, Form, Reference), VersionConstraint (SetVersion), getExpression, getStream, parseLazy, parseTextNotation, _Bulk, _Nat)
 
 readBin :: [Word8] -> Either String BULK
 readBin = parseLazy getExpression . pack
@@ -29,7 +29,7 @@ shouldParseTo :: ByteString -> BULK -> Expectation
 words `shouldParseTo` expr = parseLazy getExpression words `shouldBe` Right expr
 
 shouldParseToNum :: (Integral a, Eq a, Show a) => [Word8] -> a -> Expectation
-words `shouldParseToNum` num = words ^? _Bulk . _Int `shouldBe` Just num
+words `shouldParseToNum` num = words ^? _Bulk . _Nat `shouldBe` Just num
 
 shouldDenote :: Text -> [BULK] -> Expectation
 text `shouldDenote` list = (parseTextNotation text >>= parseLazy (getStream $ SetVersion 1 0)) `shouldBe` Right (Form list)

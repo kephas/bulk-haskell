@@ -17,8 +17,8 @@ import Data.Text (Text)
 
 makePrisms ''BULK
 
-_Int :: (Integral a) => Prism' BULK a
-_Int = prism' encodeInt toIntegral
+_Nat :: (Integral a) => Prism' BULK a
+_Nat = prism' encodeInt toNat
 
 class HasBytes a where
     _ByteString :: Prism' a ByteString

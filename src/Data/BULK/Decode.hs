@@ -6,7 +6,7 @@ module Data.BULK.Decode (
     parseLazy,
     BULK (..),
     VersionConstraint (..),
-    toIntegral,
+    toNat,
 ) where
 
 import Data.Binary.Get
@@ -122,11 +122,11 @@ getStream ReadVersion = do
 
 parseIntegral :: (Integral a) => Either Syntax BULK -> Maybe a
 parseIntegral eBulk =
-    eitherToMaybe eBulk >>= toIntegral
+    eitherToMaybe eBulk >>= toNat
 
 -- | Extract a number from a raw BULK expression
-toIntegral :: (Integral a) => BULK -> Maybe a
-toIntegral bulk =
+toNat :: (Integral a) => BULK -> Maybe a
+toNat bulk =
     case bulk of
         Array words -> Just $ BL.foldl addWord 0 words
         _ -> Nothing
