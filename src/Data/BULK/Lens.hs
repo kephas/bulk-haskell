@@ -10,15 +10,20 @@ import Data.Either.Extra (eitherToMaybe)
 import Data.List qualified as List
 import Data.Word (Word8)
 
+import Data.BULK.Core (encodeInt, toIntegral)
 import Data.BULK.Decode
 import Data.BULK.Encode
 import Data.BULK.TextNotation (parseTextNotation)
+import Data.Bits (Bits)
 import Data.Text (Text)
 
 makePrisms ''BULK
 
-_Nat :: (Integral a) => Prism' BULK a
-_Nat = prism' encodeInt toNat
+_Nat :: (Integral a, Bits a) => Prism' BULK a
+_Nat = prism' encodeNat toNat
+
+_Int :: (Integral a) => Prism' BULK a
+_Int = prism' encodeInt toIntegral
 
 class HasBytes a where
     _ByteString :: Prism' a ByteString

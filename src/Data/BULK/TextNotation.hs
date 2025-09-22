@@ -36,7 +36,7 @@ import Text.Megaparsec.Char (space)
 import Text.Megaparsec.Char.Lexer qualified as L
 
 import Data.BULK.Decode (BULK (..), VersionConstraint (ReadVersion), getStream, parseLazy)
-import Data.BULK.Encode (encodeExpr, encodeInt)
+import Data.BULK.Encode (encodeExpr, encodeNat)
 import Data.Maybe (fromMaybe)
 
 data Namespace = Namespace {marker :: Int, usedNames :: Map Text Int, availableNames :: [Int]}
@@ -119,7 +119,7 @@ literalBytesP = do
 
 decimalP :: Parser BB.Builder
 decimalP = do
-    encodeExpr . encodeInt <$> L.decimal
+    encodeExpr . encodeNat <$> (L.decimal :: Parser Int)
 
 stringSyntaxP :: Parser Text
 stringSyntaxP = do

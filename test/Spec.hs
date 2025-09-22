@@ -1,11 +1,13 @@
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE TypeApplications #-}
 {-# OPTIONS_GHC -Wno-type-defaults #-}
 
-import Data.ByteString.Lazy (cons, pack, singleton)
-import Data.Foldable (for_)
+import Data.ByteString.Lazy (ByteString, cons, pack, singleton)
+import Data.Foldable (for_, traverse_)
 import Data.Function (on)
 import Data.List (nubBy)
 import Data.String.Interpolate (i)
@@ -75,9 +77,10 @@ spec = describe "BULK" $ do
     describe "encoding" $ do
         it "encodes primitives" $ do
             encode [Nil, Form [], Array [], Reference 16 0] `shouldBe` [0, 1, 2, 0xC0, 16, 0]
-        it "encodes numbers" $ do
-            map encodeInt [0, 1, 255, 256] `shouldBe` [Array [0], Array [1], Array [255], Array [1, 0]]
-            encode [Array [0], Array [1], Array [255], Array [1, 0]] `shouldBe` [0x80, 0x81, 0xC1, 0xFF, 0xC2, 0x01, 0x00]
+        it "encodes natural numbers" $ do
+            map @Int encodeNat [0, 1, 0xFF, 0x100, 0xFFFF, 0x1_0000] `shouldBe` [Array "\0", Array "\1", Array "\xFF", Array "\1\0", Array "\xFF\xFF", Array "\0\1\0\0"]
+            map @Integer encodeNat [0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF] `shouldBe` [Array "\x00\x00\x00\x00\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"]
+            encode [Array "\0", Array "\1", Array "\xFF", Array "\1\0"] `shouldBe` "\x80\x81\xC1\xFF\xC2\x01\x00"
         prop "round-trips arbitrary primitives" $ \expr ->
             encode [expr] `shouldParseTo` expr
     --
@@ -99,7 +102,7 @@ spec = describe "BULK" $ do
             for_ smallWords $ \word ->
                 [i|#{word}|] `shouldDenote` [Array $ singleton word]
         prop "parses bigger decimals" $ forAll (chooseInt (64, maxBound)) $ \num ->
-            [i|#{num}|] `shouldDenote` [encodeInt num]
+            [i|#{num}|] `shouldDenote` [encodeNat num]
         it "parses bulk core references" $ do
             "version" `shouldDenote` [Reference 16 0]
             "( version 1 0 ) true false ( define 0x1800 ( subst ( concat ( arg 1 ) ( arg 2 ) ) ) )" `shouldDenote` [version 1 0, core 1, core 2, Form [core 6, Reference 24 0, Form [core 0x0B, Form [core 0x0A, Form [core 0x0C, Array [1]], Form [core 0x0C, Array [2]]]]]]
@@ -128,6 +131,30 @@ spec = describe "BULK" $ do
                 values = map snd rvs
                 definitions = zipWith define refs values
             pure $ eval (definitions ++ refs) `shouldBe` values
+        it "parses numbers" $
+            testInts
+                [ (0x20, [0x01], 0x1)
+                , (0x21, [0x01], 0x1)
+                , (0x21, [0x7F], 0x7F)
+                , (0x21, [0xFF], -0x1)
+                , (0x21, [0x80], -0x80)
+                , (0x21, [0x81], -0x7F)
+                , (0x21, [0x00, 0x01], 0x1)
+                , (0x21, [0x7F, 0xFF], 0x7FFF)
+                , (0x21, [0xFF, 0xFF], -0x1)
+                , (0x21, [0x80, 0x00], -0x8000)
+                , (0x21, [0x80, 0x01], -0x7FFF)
+                , (0x21, [0x00, 0x00, 0x00, 0x01], 0x1)
+                , (0x21, [0x7F, 0xFF, 0xFF, 0xFF], 0x7FFF_FFFF)
+                , (0x21, [0xFF, 0xFF, 0xFF, 0xFF], -0x1)
+                , (0x21, [0x80, 0x00, 0x00, 0x00], -0x8000_0000)
+                , (0x21, [0x80, 0x00, 0x00, 0x01], -0x7FFF_FFFF)
+                , (0x21, [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01], 0x1)
+                , (0x21, [0x7F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF], 0x7FFF_FFFF_FFFF_FFFF)
+                , (0x21, [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF], -0x1)
+                , (0x21, [0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00], -0x8000_0000_0000_0000)
+                , (0x21, [0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01], -0x7FFF_FFFF_FFFF_FFFF)
+                ]
 
 nesting, primitives, badNesting :: Either String BULK
 nesting = Right (Form [version 1 0, Form [], Form [Nil, Form [Nil], Form []]])
@@ -167,5 +194,12 @@ nubFst = nubBy ((==) `on` fst)
 smallWords :: [Word8]
 smallWords = [0 .. 63]
 
+testInts :: [(Int, ByteString, Int)] -> IO ()
+testInts = traverse_ \(kind, bytes, value) ->
+    toIntegral (bulkNum kind bytes) `shouldBe` Just value
+
 core :: Int -> BULK
 core = Reference 16
+
+bulkNum :: Int -> ByteString -> BULK
+bulkNum refName bytes = Form [Reference 0x10 refName, Array bytes]

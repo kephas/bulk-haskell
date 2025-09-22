@@ -2,6 +2,7 @@ module Test.BULK.Decode where
 
 import Control.Exception (ErrorCall, handle)
 import Control.Lens
+import Data.Bits (Bits)
 import Data.ByteString.Lazy (ByteString, pack)
 import Data.Digits qualified as D
 import Data.Either (isLeft)
@@ -28,7 +29,7 @@ readFailsOn word = isLeft (readBin [word]) `shouldBe` True
 shouldParseTo :: ByteString -> BULK -> Expectation
 words `shouldParseTo` expr = parseLazy getExpression words `shouldBe` Right expr
 
-shouldParseToNum :: (Integral a, Eq a, Show a) => [Word8] -> a -> Expectation
+shouldParseToNum :: (Integral a, Bits a, Show a) => [Word8] -> a -> Expectation
 words `shouldParseToNum` num = words ^? _Bulk . _Nat `shouldBe` Just num
 
 shouldDenote :: Text -> [BULK] -> Expectation
