@@ -22,6 +22,7 @@ define ref value =
 toIntegral :: (Integral a) => BULK -> Maybe a
 toIntegral bulk =
     case bulk of
+        Array _ -> toNat bulk
         Form [Reference 16 0x20, array] -> toNat array
         Form [Reference 16 0x21, sized -> ArraySize 1 bs] -> int getInt8 bs
         Form [Reference 16 0x21, sized -> ArraySize 2 bs] -> int getInt16be bs

@@ -19,7 +19,7 @@ import Test.QuickCheck (Gen, Property, arbitrary, choose, forAll, listOf, resize
 import Test.QuickCheck.Instances.ByteString ()
 import Prelude hiding (words)
 
-import Data.BULK (BULK (Array, Form, Reference), VersionConstraint (SetVersion), encode, getExpression, getStream, parseLazy, parseTextNotation, toIntegral, _BulkExpr, _Nat)
+import Data.BULK (BULK (Array, Form, Reference), VersionConstraint (SetVersion), encode, getExpression, getStream, parseLazy, parseTextNotation, toIntegral, _BulkExpr, _Int, _Nat)
 import Test.BULK.Encode (bulkNum)
 
 parseStreamWith :: VersionConstraint -> ByteString -> Either String BULK
@@ -45,6 +45,9 @@ shouldParseToPrism prism_ words num = words ^? _BulkExpr . prism_ `shouldBe` Jus
 
 shouldParseToNat :: (Integral a, Bits a, Show a) => ByteString -> a -> Expectation
 shouldParseToNat = shouldParseToPrism _Nat
+
+shouldParseToInt :: ByteString -> Int -> Expectation
+shouldParseToInt = shouldParseToPrism _Int
 
 shouldDenote :: Text -> [BULK] -> Expectation
 text `shouldDenote` list = (parseTextNotation text >>= parseLazy (getStream $ SetVersion 1 0)) `shouldBe` Right (Form list)
