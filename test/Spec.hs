@@ -63,12 +63,12 @@ spec = describe "BULK" $ do
                     readFile "test/bad nesting.bulk" `shouldReturn` badNesting
                 it "checks for version 1.0" $ do
                     readFile "test/missing version.bulk" `shouldReturn` Left "missing version"
-                    readFileWithVersion (SetVersion 1 0) "test/missing version.bulk" `shouldReturn` Right (Form [Nil])
+                    readFileWithVersion (SetVersion 1 0) "test/missing version.bulk" `shouldReturn` Right [Nil]
             describe "version and profile" $ do
                 it "checks for version 1.0" $ do
                     parseStreamWith ReadVersion "\x01\x10\x00\x81\x81\x02" `shouldBe` Left "this application only supports BULK version 1.0"
                     parseStreamWith ReadVersion "\0" `shouldBe` Left "missing version"
-                    parseStreamWith (SetVersion 1 0) "\0" `shouldBe` Right (Form [Nil])
+                    parseStreamWith (SetVersion 1 0) "\0" `shouldBe` Right [Nil]
                     parseStreamWith (SetVersion 1 1) "\0" `shouldBe` Left "this application only supports BULK version 1.0"
         --
         -- Encoding
@@ -143,28 +143,26 @@ spec = describe "BULK" $ do
     describe "slow tests" $ do
         prop "reads really big generic arrays" $ withMaxSuccess 20 $ test_bigger_arrays_decoding 3
 
-nesting, primitives, badNesting :: Either String BULK
-nesting = Right (Form [version 1 0, Form [], Form [Nil, Form [Nil], Form []]])
+nesting, primitives, badNesting :: Either String [BULK]
+nesting = Right [version 1 0, Form [], Form [Nil, Form [Nil], Form []]]
 primitives =
     Right
-        ( Form
-            [ version 1 0
-            , Form
-                [ Nil
-                , Array "Hello world!"
-                , Array "\x2A"
-                , Array ""
-                , Array "\x40"
-                , Array "\x01\x00"
-                , Array "\x01\x00\x00\x00"
-                , Array "\x01\x23\x45\x67\x89\xAB\xCD\xEF"
-                , Reference 0x18 0x01
-                , Reference 0x18 0x02
-                , Reference 0x7E 0xFF
-                , Reference (0x7F + 0xFF + 0xBC) 0x1A
-                ]
+        [ version 1 0
+        , Form
+            [ Nil
+            , Array "Hello world!"
+            , Array "\x2A"
+            , Array ""
+            , Array "\x40"
+            , Array "\x01\x00"
+            , Array "\x01\x00\x00\x00"
+            , Array "\x01\x23\x45\x67\x89\xAB\xCD\xEF"
+            , Reference 0x18 0x01
+            , Reference 0x18 0x02
+            , Reference 0x7E 0xFF
+            , Reference (0x7F + 0xFF + 0xBC) 0x1A
             ]
-        )
+        ]
 badNesting = Left "not enough data (while reading a form)"
 
 parseOnlyIntCases, bidirectionalIntCases :: [(Int, ByteString, Int)]

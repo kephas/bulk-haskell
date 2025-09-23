@@ -51,10 +51,10 @@ parseTextNotation source = do
     builders <- flip evalState bulkProfile $ sequence <$> traverse parseTextToken lexemes
     pure $ BB.toLazyByteString $ mconcat builders
 
-parseTextFile :: FilePath -> IO (Either String BULK)
+parseTextFile :: FilePath -> IO (Either String [BULK])
 parseTextFile = parseTextFileWith lenientDecode ReadVersion
 
-parseTextFileWith :: OnDecodeError -> VersionConstraint -> FilePath -> IO (Either String BULK)
+parseTextFileWith :: OnDecodeError -> VersionConstraint -> FilePath -> IO (Either String [BULK])
 parseTextFileWith onerror constraint file = do
     bytes <- B.readFile file
     pure $ parseTextNotation (LT.toStrict $ LTE.decodeUtf8With onerror bytes) >>= parseLazy (getStream constraint)

@@ -19,10 +19,10 @@ import Test.QuickCheck (Gen, Property, arbitrary, choose, forAll, listOf, resize
 import Test.QuickCheck.Instances.ByteString ()
 import Prelude hiding (words)
 
-import Data.BULK (BULK (Array, Form, Reference), VersionConstraint (SetVersion), encode, getExpression, getStream, parseLazy, parseTextNotation, toIntegral, _BulkExpr, _Int, _Nat)
+import Data.BULK (BULK (Array, Reference), VersionConstraint (SetVersion), encode, getExpression, getStream, parseLazy, parseTextNotation, toIntegral, _BulkExpr, _Int, _Nat)
 import Test.BULK.Encode (bulkNum)
 
-parseStreamWith :: VersionConstraint -> ByteString -> Either String BULK
+parseStreamWith :: VersionConstraint -> ByteString -> Either String [BULK]
 parseStreamWith version = parseLazy (getStream version)
 
 readFailsOn :: Word8 -> Expectation
@@ -50,7 +50,7 @@ shouldParseToInt :: ByteString -> Int -> Expectation
 shouldParseToInt = shouldParseToPrism _Int
 
 shouldDenote :: Text -> [BULK] -> Expectation
-text `shouldDenote` list = (parseTextNotation text >>= parseLazy (getStream $ SetVersion 1 0)) `shouldBe` Right (Form list)
+text `shouldDenote` list = (parseTextNotation text >>= parseLazy (getStream $ SetVersion 1 0)) `shouldBe` Right list
 
 unDigits :: [Word8] -> Integer
 unDigits = D.unDigits 256 . map fromIntegral

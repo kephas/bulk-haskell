@@ -40,10 +40,10 @@ data Syntax = FormEnd
 data VersionConstraint = ReadVersion | SetVersion Int Int
 
 -- | Read an entire file as a BULK stream
-readFile :: FilePath -> IO (Either String BULK)
+readFile :: FilePath -> IO (Either String [BULK])
 readFile = readFileWithVersion ReadVersion
 
-readFileWithVersion :: VersionConstraint -> FilePath -> IO (Either String BULK)
+readFileWithVersion :: VersionConstraint -> FilePath -> IO (Either String [BULK])
 readFileWithVersion version path = parseLazy (getStream version) <$> BL.readFile path
 
 -- | Get monad to read one BULK expression
@@ -86,32 +86,32 @@ getReference marker = do
 
 data ParseContext = AtTopLevel | InForm
 
-getSequence :: ParseContext -> Get BULK
+getSequence :: ParseContext -> Get [BULK]
 getSequence context = do
-    loop []
+    loop
   where
-    loop results = do
+    loop = do
         eNext <- getNext
         finished <- isEmpty
         case (eNext, context, finished) of
             (Left FormEnd, AtTopLevel, _) -> fail "form end at top level"
-            (Left FormEnd, InForm, _) -> pure $ Form $ reverse results
-            (Right next, AtTopLevel, True) -> pure $ Form $ reverse $ next : results
-            (_, InForm, True) -> fail "not enough data (while reading a form)"
-            (Right next, _, False) -> loop (next : results)
+            (Right _, InForm, True) -> fail "not enough data (while reading a form)"
+            (Left FormEnd, InForm, _) -> pure []
+            (Right next, AtTopLevel, True) -> pure [next]
+            (Right next, _, False) -> (next :) <$> loop
 
-getForm = getSequence InForm
+getForm = Form <$> getSequence InForm
 
 -- | Get action to read a single BULK expression
 getExpression :: Get BULK
 getExpression = getNext >>= either (const $ fail "form end at top level") pure
 
 -- | Get action to read an entire BULK stream
-getStream :: VersionConstraint -> Get BULK
+getStream :: VersionConstraint -> Get [BULK]
 getStream (SetVersion 1 0) = getSequence AtTopLevel
 getStream (SetVersion _ _) = fail "this application only supports BULK version 1.0"
 getStream ReadVersion = do
-    result@(Form (first : rest)) <- getSequence AtTopLevel
+    result@(first : rest) <- getSequence AtTopLevel
     case first of
         Form [Reference 16 0, Array major, Array minor]
             | [1] <- BL.unpack major
