@@ -83,6 +83,7 @@ test-suite bulk-test
   other-modules:
       Test.BULK.Decode
       Test.BULK.Encode
+      Test.QuickCheck.Instances.BULK
       Paths_bulk
   hs-source-dirs:
       test

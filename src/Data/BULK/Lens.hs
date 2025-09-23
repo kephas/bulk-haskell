@@ -25,20 +25,8 @@ _Nat = prism' encodeNat toNat
 _Int :: (Integral a) => Prism' BULK a
 _Int = prism' encodeInt toIntegral
 
-class HasBytes a where
-    _ByteString :: Prism' a ByteString
+_Bytes :: Prism' Text ByteString
+_Bytes = prism' undefined $ eitherToMaybe . parseTextNotation
 
-instance HasBytes ByteString where
-    _ByteString = id
-
-instance HasBytes [Word8] where
-    _ByteString = prism' BL.unpack $ Just . BL.pack
-
-instance HasBytes Text where
-    _ByteString = prism' undefined $ eitherToMaybe . parseTextNotation
-
-decoded :: Prism' ByteString BULK
-decoded = prism' (encode . List.singleton) (eitherToMaybe . parseLazy getExpression)
-
-_Bulk :: (HasBytes a) => Prism' a BULK
-_Bulk = _ByteString . decoded
+_BulkExpr :: Prism' ByteString BULK
+_BulkExpr = prism' (encode . List.singleton) (eitherToMaybe . parseLazy getExpression)
