@@ -33,7 +33,7 @@ test_bigger_arrays_decoding size =
     forAll (arraySizedWith size) $ \array ->
         encode [array] `shouldParseTo` array
 
-parseInts :: [(Int, ByteString, Int)] -> IO ()
+parseInts :: (Integral a, Show a) => [(Int, ByteString, a)] -> IO ()
 parseInts = traverse_ \(kind, bytes, value) ->
     toIntegral (bulkNum kind bytes) `shouldBe` Just value
 

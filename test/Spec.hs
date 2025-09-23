@@ -4,7 +4,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TypeApplications #-}
 
-import Data.ByteString.Lazy (pack, singleton)
+import Data.ByteString.Lazy (ByteString, pack, singleton)
 import Data.Foldable (for_, traverse_)
 import Data.Function (on)
 import Data.List (nubBy)
@@ -132,30 +132,14 @@ spec = describe "BULK" $ do
             describe "parses numbers" $ do
                 it "small ints" $ for_ smallWords \w ->
                     encodeSmallInt w `shouldParseToInt` fromIntegral w
-                it "typed Int forms" $
-                    parseInts
-                        [ (0x20, "\x01", 0x1)
-                        , (0x21, "\x01", 0x1)
-                        , (0x21, "\x7F", 0x7F)
-                        , (0x21, "\xFF", -0x1)
-                        , (0x21, "\x80", -0x80)
-                        , (0x21, "\x81", -0x7F)
-                        , (0x21, "\x00\x01", 0x1)
-                        , (0x21, "\x7F\xFF", 0x7FFF)
-                        , (0x21, "\xFF\xFF", -0x1)
-                        , (0x21, "\x80\x00", -0x8000)
-                        , (0x21, "\x80\x01", -0x7FFF)
-                        , (0x21, "\x00\x00\x00\x01", 0x1)
-                        , (0x21, "\x7F\xFF\xFF\xFF", 0x7FFF_FFFF)
-                        , (0x21, "\xFF\xFF\xFF\xFF", -0x1)
-                        , (0x21, "\x80\x00\x00\x00", -0x8000_0000)
-                        , (0x21, "\x80\x00\x00\x01", -0x7FFF_FFFF)
-                        , (0x21, "\x00\x00\x00\x00\x00\x00\x00\x01", 0x1)
-                        , (0x21, "\x7F\xFF\xFF\xFF\xFF\xFF\xFF\xFF", 0x7FFF_FFFF_FFFF_FFFF)
-                        , (0x21, "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF", -0x1)
-                        , (0x21, "\x80\x00\x00\x00\x00\x00\x00\x00", -0x8000_0000_0000_0000)
-                        , (0x21, "\x80\x00\x00\x00\x00\x00\x00\x01", -0x7FFF_FFFF_FFFF_FFFF)
-                        ]
+                it "typed Int forms" $ do
+                    parseInts $ parseOnlyIntCases ++ bidirectionalIntCases
+                    parseInts bigIntCases
+            describe "encodes numbers" $ do
+                it "ints" $ do
+                    encodeInt @Int (-1) `shouldBe` Form [core 0x21, Array "\xFF"]
+                    for_ bidirectionalIntCases \(kind, bytes, value) ->
+                        encodeInt value `shouldBe` Form [core kind, Array bytes]
     describe "slow tests" $ do
         prop "reads really big generic arrays" $ withMaxSuccess 20 $ test_bigger_arrays_decoding 3
 
@@ -182,3 +166,34 @@ primitives =
             ]
         )
 badNesting = Left "not enough data (while reading a form)"
+
+parseOnlyIntCases, bidirectionalIntCases :: [(Int, ByteString, Int)]
+parseOnlyIntCases =
+    [ (0x20, "\x01", 0x1)
+    , (0x21, "\x00\x01", 0x1)
+    , (0x21, "\xFF\xFF", -0x1)
+    , (0x21, "\x00\x00\x00\x01", 0x1)
+    , (0x21, "\xFF\xFF\xFF\xFF", -0x1)
+    , (0x21, "\x00\x00\x00\x00\x00\x00\x00\x01", 0x1)
+    , (0x21, "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF", -0x1)
+    ]
+bidirectionalIntCases =
+    [ (0x21, "\x01", 0x1)
+    , (0x21, "\x7F", 0x7F)
+    , (0x21, "\xFF", -0x1)
+    , (0x21, "\x80", -0x80)
+    , (0x21, "\x81", -0x7F)
+    , (0x21, "\x7F\xFF", 0x7FFF)
+    , (0x21, "\x80\x00", -0x8000)
+    , (0x21, "\x80\x01", -0x7FFF)
+    , (0x21, "\x7F\xFF\xFF\xFF", 0x7FFF_FFFF)
+    , (0x21, "\x80\x00\x00\x00", -0x8000_0000)
+    , (0x21, "\x80\x00\x00\x01", -0x7FFF_FFFF)
+    , (0x21, "\x7F\xFF\xFF\xFF\xFF\xFF\xFF\xFF", 0x7FFF_FFFF_FFFF_FFFF)
+    , (0x21, "\x80\x00\x00\x00\x00\x00\x00\x00", -0x8000_0000_0000_0000)
+    , (0x21, "\x80\x00\x00\x00\x00\x00\x00\x01", -0x7FFF_FFFF_FFFF_FFFF)
+    ]
+
+bigIntCases :: [(Int, ByteString, Integer)]
+bigIntCases =
+    [(0x21, "\x80\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00", -0x8000_0000_0000_0000_0000_0000_0000_0000)]

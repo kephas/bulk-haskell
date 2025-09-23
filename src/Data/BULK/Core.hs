@@ -24,18 +24,31 @@ toIntegral bulk =
     case bulk of
         Array _ -> toNat bulk
         Form [Reference 16 0x20, array] -> toNat array
-        Form [Reference 16 0x21, sized -> ArraySize 1 bs] -> int getInt8 bs
-        Form [Reference 16 0x21, sized -> ArraySize 2 bs] -> int getInt16be bs
-        Form [Reference 16 0x21, sized -> ArraySize 4 bs] -> int getInt32be bs
-        Form [Reference 16 0x21, sized -> ArraySize 8 bs] -> int getInt64be bs
+        Form [Reference 16 0x21, ArraySize 1 bs] -> int getInt8 bs
+        Form [Reference 16 0x21, ArraySize 2 bs] -> int getInt16be bs
+        Form [Reference 16 0x21, ArraySize 4 bs] -> int getInt32be bs
+        Form [Reference 16 0x21, ArraySize 8 bs] -> int getInt64be bs
+        Form [Reference 16 0x21, ArrayBlocks n bs] -> bigInt n bs
         _ -> Nothing
   where
     int get = eitherToMaybe . fmap fromIntegral . parseLazy get
+    bigInt blocks = int (getBlocks blocks 0)
+    getBlocks 1 acc = (acc +) . fromIntegral <$> getInt64be
+    getBlocks blocks acc = do
+        nextBlock <- getInt64be
+        getBlocks (blocks - 1) $ 2 ^ 64 * fromIntegral nextBlock
 
-pattern ArraySize size array <- Just (size, array)
+pattern ArraySize size array <- (sized -> Just (size, array))
+pattern ArrayBlocks blocks array <- (blockSized -> Just (blocks, array))
 
 sized (Array bs) = Just (BL.length bs, bs)
 sized _ = Nothing
+
+blockSized (Array bs) =
+    if aligned then Just (blocks, bs) else Nothing
+  where
+    (blocks, aligned) = (== 0) <$> divMod (BL.length bs) 8
+blockSized _ = Nothing
 
 encodeInt :: (Integral a) => a -> BULK
 encodeInt num = Form [Reference 0x10 0x21, unsafeEncodeBounded undefined [boundedPutter putInt8, boundedPutter putInt16be, boundedPutter putInt32be, boundedPutter putInt64be] num]
