@@ -1,3 +1,7 @@
+{-# LANGUAGE BinaryLiterals #-}
+{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE ViewPatterns #-}
+
 module Data.BULK.Decode (
     readFile,
     readFileWithVersion,
@@ -10,7 +14,7 @@ module Data.BULK.Decode (
 ) where
 
 import Data.Binary.Get
-import Data.Bits (Bits, (.&.))
+import Data.Bits (Bits, shiftR, (.&.))
 import Data.Bool (bool)
 import Data.ByteString.Lazy (ByteString)
 import Data.ByteString.Lazy qualified as BL
@@ -55,15 +59,13 @@ getNext = do
         1 -> Right <$> getForm
         2 -> pure $ Left FormEnd
         3 -> getArray
+        Prefix2 0b10 num -> pure $ Right $ Array $ BL.singleton num
+        Prefix2 0b11 size -> Right . Array <$> getLazyByteString size
         _
             | marker `elem` [0x4 .. 0xF] ->
                 fail $ show marker ++ " is a reserved marker byte"
             | marker `elem` [0x10 .. 0x7F] ->
                 Right <$> getReference marker
-            | Just num <- with2bitPrefix 0x80 marker ->
-                pure $ Right $ Array $ BL.singleton num
-            | Just size <- with2bitPrefix 0xC0 marker ->
-                Right . Array <$> getLazyByteString size
             | otherwise -> fail "impossible"
 
 getArray :: Get (Either Syntax BULK)
@@ -113,10 +115,7 @@ getStream (SetVersion _ _) = fail "this application only supports BULK version 1
 getStream ReadVersion = do
     result@(first : rest) <- getSequence AtTopLevel
     case first of
-        Form [Reference 16 0, Array major, Array minor]
-            | [1] <- BL.unpack major
-            , [0] <- BL.unpack minor ->
-                pure result
+        Form [Reference 16 0, Nat 1, Nat 0] -> pure result
         Form [Reference 16 0, _, _] -> fail "this application only supports BULK version 1.0"
         _ -> fail "missing version"
 
@@ -133,11 +132,12 @@ toNat bulk =
   where
     addWord num word = num * 256 + fromIntegral word
 
-with2bitPrefix :: (Integral a) => Word8 -> Word8 -> Maybe a
-with2bitPrefix prefix byte =
-    if byte .&. 0xC0 == prefix
-        then Just $ fromIntegral $ byte .&. 0x3F
-        else Nothing
+pattern Nat num <- (toNat -> Just num)
+
+split26 :: (Integral a) => Word8 -> (Word8, a)
+split26 byte = (shiftR (byte .&. 0xC0) 6, fromIntegral $ byte .&. 0x3F)
+
+pattern Prefix2 prefix value <- (split26 -> (prefix, value))
 
 parseLazy :: Get a -> ByteString -> Either String a
 parseLazy get input =
