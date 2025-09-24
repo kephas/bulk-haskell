@@ -1,12 +1,14 @@
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedLists #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE ViewPatterns #-}
 
-module Data.BULK.Encode (encode, encodeNat, encodeExpr, unsafeEncodeBounded, boundedPutter)
+module Data.BULK.Encode (encode, encodeNat, pattern Nat, encodeExpr, unsafeEncodeBounded, boundedPutter)
 where
 
-import Data.BULK.Decode (BULK (..))
+import Data.BULK.Decode (BULK (..), toNat)
 import Data.Binary (Put, Word16, Word32, Word64, Word8, putWord8)
 import Data.Binary.Put (putWord16be, putWord32be, putWord64be, runPut)
 import Data.Bits (Bits (..))
@@ -40,6 +42,11 @@ encodeExpr (Reference ns name)
 
 encodeNat :: (Integral a, Bits a) => a -> BULK
 encodeNat = unsafeEncodeBounded unsafePutWord64s natEncoders
+
+pattern Nat :: (Integral a, Bits a) => a -> BULK
+pattern Nat num <- (toNat -> Just num)
+    where
+        Nat num = encodeNat num
 
 unsafeEncodeBounded :: (Integral a) => (a -> Put) -> [BoundedPutter a] -> a -> BULK
 unsafeEncodeBounded unsafePutter boundedPutters num = Array $ runPut putter

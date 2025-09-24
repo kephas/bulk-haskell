@@ -1,6 +1,7 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TypeApplications #-}
 
@@ -66,10 +67,14 @@ spec = describe "BULK" $ do
                     readFileWithVersion (SetVersion 1 0) "test/missing version.bulk" `shouldReturn` Right [Nil]
             describe "version and profile" $ do
                 it "checks for version 1.0" $ do
-                    parseStreamWith ReadVersion "\x01\x10\x00\x81\x81\x02" `shouldBe` Left "this application only supports BULK version 1.0"
+                    parseStreamWith ReadVersion "\x01\x10\x00\x81\x80\x02" `shouldBe` Right [Form [Reference 16 0, 1, 0]]
+                    parseStreamWith ReadVersion "\x01\x10\x00\x81\x82\x02" `shouldBe` Right [Form [Reference 16 0, 1, 2]]
+                    parseStreamWith ReadVersion "\x01\x10\x00\x82\x80\x02" `shouldBe` Left "this application only supports BULK version 1.x"
+                    parseStreamWith ReadVersion "\x01\x10\x00\x81\x00\x00\x02" `shouldBe` Left "malformed version"
                     parseStreamWith ReadVersion "\0" `shouldBe` Left "missing version"
                     parseStreamWith (SetVersion 1 0) "\0" `shouldBe` Right [Nil]
-                    parseStreamWith (SetVersion 1 1) "\0" `shouldBe` Left "this application only supports BULK version 1.0"
+                    parseStreamWith (SetVersion 1 2) "\0" `shouldBe` Right [Nil]
+                    parseStreamWith (SetVersion 2 0) "\0" `shouldBe` Left "this application only supports BULK version 1.x"
         --
         -- Encoding
         describe "encoding" $ do

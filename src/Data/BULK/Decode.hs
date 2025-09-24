@@ -110,13 +110,14 @@ getExpression = getNext >>= either (const $ fail "form end at top level") pure
 
 -- | Get action to read an entire BULK stream
 getStream :: VersionConstraint -> Get [BULK]
-getStream (SetVersion 1 0) = getSequence AtTopLevel
-getStream (SetVersion _ _) = fail "this application only supports BULK version 1.0"
+getStream (SetVersion 1 _) = getSequence AtTopLevel
+getStream (SetVersion _ _) = fail "this application only supports BULK version 1.x"
 getStream ReadVersion = do
     result@(first : rest) <- getSequence AtTopLevel
     case first of
-        Form [Reference 16 0, Nat 1, Nat 0] -> pure result
-        Form [Reference 16 0, _, _] -> fail "this application only supports BULK version 1.0"
+        Form [Reference 16 0, Nat 1, Nat _] -> pure result
+        Form [Reference 16 0, Nat _, Nat _] -> fail "this application only supports BULK version 1.x"
+        Form (Reference 16 0 : _) -> fail "malformed version"
         _ -> fail "missing version"
 
 parseIntegral :: (Integral a) => Either Syntax BULK -> Maybe a
