@@ -9,6 +9,7 @@ import Data.Binary.Get (getInt16be, getInt32be, getInt64be, getInt8)
 import Data.Binary.Put (putInt16be, putInt32be, putInt64be, putInt8)
 import Data.ByteString.Lazy qualified as BL
 import Data.Either.Extra (eitherToMaybe)
+import Data.Int (Int64)
 
 version :: Int -> Int -> BULK
 version major minor =
@@ -38,12 +39,17 @@ toIntegral bulk =
         nextBlock <- getInt64be
         getBlocks (blocks - 1) $ 2 ^ 64 * fromIntegral nextBlock
 
+pattern ArraySize :: Int64 -> BL.ByteString -> BULK
 pattern ArraySize size array <- (sized -> Just (size, array))
+
+pattern ArrayBlocks :: Int64 -> BL.ByteString -> BULK
 pattern ArrayBlocks blocks array <- (blockSized -> Just (blocks, array))
 
+sized :: BULK -> Maybe (Int64, BL.ByteString)
 sized (Array bs) = Just (BL.length bs, bs)
 sized _ = Nothing
 
+blockSized :: BULK -> Maybe (Int64, BL.ByteString)
 blockSized (Array bs) =
     if aligned then Just (blocks, bs) else Nothing
   where

@@ -9,16 +9,14 @@ module Data.BULK.Encode (encode, encodeNat, pattern Nat, encodeExpr, unsafeEncod
 where
 
 import Data.BULK.Decode (BULK (..), toNat)
-import Data.Binary (Put, Word16, Word32, Word64, Word8, putWord8)
+import Data.Binary (Put, putWord8)
 import Data.Binary.Put (putWord16be, putWord32be, putWord64be, runPut)
 import Data.Bits (Bits (..))
 import Data.ByteString.Builder as BB
 import Data.ByteString.Lazy qualified as BS
-import Data.Digits (digits)
 import Data.Foldable (find, traverse_)
 import Data.List.Extra (list)
 import Data.Maybe (fromMaybe)
-import Data.Proxy (Proxy (Proxy))
 
 encode :: [BULK] -> BS.ByteString
 encode = BB.toLazyByteString . encodeSeq
@@ -73,10 +71,6 @@ findPutter encoders num =
 
 boundedPutter :: forall a b. (Integral a, Bounded a, Integral b) => (a -> Put) -> BoundedPutter b
 boundedPutter putter = (fromIntegral (minBound @a), fromIntegral (maxBound @a), putter . fromIntegral)
-
-asWords :: (Integral a) => a -> [Word8]
-asWords num =
-    list [0] (:) $ map fromIntegral (digits 256 num)
 
 unsafePutWord64s :: (Integral a, Bits a) => a -> Put
 unsafePutWord64s =

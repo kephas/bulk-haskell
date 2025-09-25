@@ -5,6 +5,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE NoFieldSelectors #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Data.BULK.TextNotation where
 
@@ -15,9 +16,8 @@ import Data.ByteString.Builder qualified as BB
 import Data.ByteString.Lazy (ByteString)
 import Data.ByteString.Lazy qualified as B
 import Data.Char (isSpace)
-import Data.Functor (($>))
+import Data.Functor (void, ($>))
 import Data.List (sortOn)
-import Data.List qualified as List
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Map (Map)
 import Data.Map qualified as M
@@ -29,15 +29,13 @@ import Data.Text qualified as T
 import Data.Text.Encoding.Error (OnDecodeError, lenientDecode)
 import Data.Text.Lazy qualified as LT
 import Data.Text.Lazy.Encoding qualified as LTE
-import Data.Void (Void)
 import Data.Word (Word8)
-import Text.Megaparsec (ErrorFancy (ErrorFail), MonadParsec (..), ParseError (FancyError), ParseErrorBundle (..), Parsec, ParsecT, ShowErrorComponent (..), TraversableStream, VisualStream, anySingleBut, choice, chunk, errorBundlePretty, many, match, noneOf, oneOf, optional, parseMaybe, runParserT, satisfy, single, some, takeRest, (<|>))
+import Text.Megaparsec (ErrorFancy (ErrorFail), MonadParsec (..), ParseError (FancyError), ParseErrorBundle (..), ParsecT, ShowErrorComponent (..), TraversableStream, VisualStream, anySingleBut, choice, chunk, errorBundlePretty, many, match, optional, runParserT, satisfy, single, some, takeRest, (<|>))
 import Text.Megaparsec.Char (space)
 import Text.Megaparsec.Char.Lexer qualified as L
 
 import Data.BULK.Decode (BULK (..), VersionConstraint (ReadVersion), getStream, parseLazy)
 import Data.BULK.Encode (encodeExpr, encodeNat)
-import Data.Maybe (fromMaybe)
 
 data Namespace = Namespace {marker :: Int, usedNames :: Map Text Int, availableNames :: [Int]}
 
@@ -83,7 +81,7 @@ parseTextToken :: Text -> State NamespaceMap (Either String BB.Builder)
 parseTextToken "nil" = pure $ w8 0
 parseTextToken "(" = pure $ w8 1
 parseTextToken ")" = pure $ w8 2
-parseTextToken token = runParserM showFail tokenP token
+parseTextToken token_ = runParserM showFail tokenP token_
 
 w8 :: (Applicative f) => Word8 -> f BB.Builder
 w8 = pure . BB.word8
@@ -107,12 +105,12 @@ smallArrayP = do
 
 literalBytesP :: Parser BB.Builder
 literalBytesP = do
-    chunk "0x"
+    void $ chunk "0x"
     someBytes
   where
     someBytes :: Parser BB.Builder
     someBytes = do
-        optional (single '-')
+        void $ optional (single '-')
         byte <- byteP
         rest <- try someBytes <|> pure mempty
         pure $ BB.word8 byte <> rest
@@ -123,9 +121,9 @@ decimalP = do
 
 stringSyntaxP :: Parser Text
 stringSyntaxP = do
-    single '"'
+    void $ single '"'
     (text, _) <- match $ many (anySingleBut '"')
-    single '"'
+    void $ single '"'
     pure text
 
 quotedStringP :: Parser Text
@@ -142,7 +140,7 @@ referenceP = qualified <|> unqualified
   where
     qualified = do
         ns <- T.pack <$> some (anySingleBut ':')
-        single ':'
+        void $ single ':'
         name <- takeRest
         ref <- ensureRef ns name
         pure $ encodeExpr ref

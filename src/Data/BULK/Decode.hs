@@ -14,18 +14,13 @@ module Data.BULK.Decode (
 ) where
 
 import Data.Binary.Get
-import Data.Bits (Bits, shiftR, (.&.))
+import Data.Bits (shiftR, (.&.))
 import Data.Bool (bool)
 import Data.ByteString.Lazy (ByteString)
 import Data.ByteString.Lazy qualified as BL
 import Data.Either.Extra (eitherToMaybe)
-import Data.Void (absurd)
 import Data.Word (
     Word8,
- )
-import System.IO (
-    Handle,
-    stdin,
  )
 import Prelude hiding (readFile)
 

@@ -7,11 +7,9 @@ module Data.BULK.Lens where
 import Control.Lens
 import Data.Bits (Bits)
 import Data.ByteString.Lazy (ByteString)
-import Data.ByteString.Lazy qualified as BL
 import Data.Either.Extra (eitherToMaybe)
 import Data.List qualified as List
 import Data.Text (Text)
-import Data.Word (Word8)
 
 import Data.BULK.Core (encodeInt, toIntegral)
 import Data.BULK.Decode
