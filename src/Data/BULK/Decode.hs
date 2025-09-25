@@ -8,7 +8,6 @@ module Data.BULK.Decode (
     getExpression,
     getStream,
     parseLazy,
-    BULK (..),
     VersionConstraint (..),
     toNat,
 ) where
@@ -22,15 +21,10 @@ import Data.Either.Extra (eitherToMaybe)
 import Data.Word (
     Word8,
  )
+import Witch (from)
 import Prelude hiding (readFile)
 
--- | Raw BULK expression
-data BULK
-    = Nil
-    | Form [BULK]
-    | Array ByteString
-    | Reference Int Int
-    deriving (Eq, Ord, Show)
+import Data.BULK.Types (BULK (..), Namespace (..))
 
 -- | Syntax token
 data Syntax = FormEnd
@@ -39,10 +33,10 @@ data Syntax = FormEnd
 data VersionConstraint = ReadVersion | SetVersion Int Int
 
 -- | Read an entire file as a BULK stream
-readFile :: FilePath -> IO (Either String [BULK])
+readFile :: FilePath -> IO (Either String BULK)
 readFile = readFileWithVersion ReadVersion
 
-readFileWithVersion :: VersionConstraint -> FilePath -> IO (Either String [BULK])
+readFileWithVersion :: VersionConstraint -> FilePath -> IO (Either String BULK)
 readFileWithVersion version path = parseLazy (getStream version) <$> BL.readFile path
 
 -- | Get monad to read one BULK expression
@@ -74,7 +68,7 @@ getArray = do
 getReference :: Word8 -> Get BULK
 getReference marker = do
     ns <- bool getSpecial pure (marker < 0x7F) $ fromIntegral marker
-    Reference ns <$> getInt
+    Reference (from ns) <$> getInt
   where
     getSpecial acc = do
         next <- getInt
@@ -97,6 +91,7 @@ getSequence context = do
             (Right next, AtTopLevel, True) -> pure [next]
             (Right next, _, False) -> (next :) <$> loop
 
+getForm :: Get BULK
 getForm = Form <$> getSequence InForm
 
 -- | Get action to read a single BULK expression
@@ -104,15 +99,15 @@ getExpression :: Get BULK
 getExpression = getNext >>= either (const $ fail "form end at top level") pure
 
 -- | Get action to read an entire BULK stream
-getStream :: VersionConstraint -> Get [BULK]
-getStream (SetVersion 1 _) = getSequence AtTopLevel
+getStream :: VersionConstraint -> Get BULK
+getStream (SetVersion 1 _) = Form <$> getSequence AtTopLevel
 getStream (SetVersion _ _) = fail "this application only supports BULK version 1.x"
 getStream ReadVersion = do
-    result@(first : rest) <- getSequence AtTopLevel
+    result@(first : _) <- getSequence AtTopLevel
     case first of
-        Form [Reference 16 0, Nat 1, Nat _] -> pure result
-        Form [Reference 16 0, Nat _, Nat _] -> fail "this application only supports BULK version 1.x"
-        Form (Reference 16 0 : _) -> fail "malformed version"
+        Form [Reference CoreNamespace 0, Nat 1, Nat _] -> pure $ Form result
+        Form [Reference CoreNamespace 0, Nat _, Nat _] -> fail "this application only supports BULK version 1.x"
+        Form (Reference CoreNamespace 0 : _) -> fail "malformed version"
         _ -> fail "missing version"
 
 parseIntegral :: (Integral a) => Either Syntax BULK -> Maybe a
@@ -123,16 +118,18 @@ parseIntegral eBulk =
 toNat :: (Integral a) => BULK -> Maybe a
 toNat bulk =
     case bulk of
-        Array words -> Just $ BL.foldl addWord 0 words
+        Array words_ -> Just $ BL.foldl addWord 0 words_
         _ -> Nothing
   where
     addWord num word = num * 256 + fromIntegral word
 
+pattern Nat :: (Integral a) => a -> BULK
 pattern Nat num <- (toNat -> Just num)
 
 split26 :: (Integral a) => Word8 -> (Word8, a)
 split26 byte = (shiftR (byte .&. 0xC0) 6, fromIntegral $ byte .&. 0x3F)
 
+pattern Prefix2 :: (Integral a) => Word8 -> a -> Word8
 pattern Prefix2 prefix value <- (split26 -> (prefix, value))
 
 parseLazy :: Get a -> ByteString -> Either String a

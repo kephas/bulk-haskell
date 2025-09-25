@@ -7,12 +7,10 @@ import Control.Lens ((%~), (&))
 import Data.ByteString.Lazy (ByteString)
 
 import Data.BULK (BULK (..), encodeNat, _Nat, pattern Nat)
-
-core :: Int -> BULK
-core = Reference 16
+import Data.BULK.Core (pattern Core)
 
 bulkNum :: Int -> ByteString -> BULK
-bulkNum refName bytes = Form [Reference 0x10 refName, Array bytes]
+bulkNum refName bytes = Form [Core refName, Array bytes]
 
 instance Num BULK where
     (+) = nat2 (+)

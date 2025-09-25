@@ -1,10 +1,11 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Test.BULK.Decode where
 
 import Control.Exception (ErrorCall, assert, handle)
-import Control.Lens
+import Control.Lens hiding (from)
 import Data.Bits (Bits (..))
 import Data.ByteString.Lazy (ByteString, pack, singleton)
 import Data.Digits qualified as D
@@ -17,12 +18,13 @@ import System.Random (Random)
 import Test.Hspec
 import Test.QuickCheck (Gen, Property, arbitrary, choose, forAll, listOf, resize)
 import Test.QuickCheck.Instances.ByteString ()
+import Witch (via)
 import Prelude hiding (words)
 
-import Data.BULK (BULK (Array, Reference), VersionConstraint (SetVersion), encode, getExpression, getStream, parseLazy, parseTextNotation, toIntegral, _BulkExpr, _Int, _Nat)
+import Data.BULK (BULK (Array, Form, Reference), VersionConstraint (SetVersion), encode, getExpression, getStream, parseLazy, parseTextNotation, toIntegral, _BulkExpr, _Int, _Nat)
 import Test.BULK.Encode (bulkNum)
 
-parseStreamWith :: VersionConstraint -> ByteString -> Either String [BULK]
+parseStreamWith :: VersionConstraint -> ByteString -> Either String BULK
 parseStreamWith version = parseLazy (getStream version)
 
 readFailsOn :: Word8 -> Expectation
@@ -50,7 +52,7 @@ shouldParseToInt :: ByteString -> Int -> Expectation
 shouldParseToInt = shouldParseToPrism _Int
 
 shouldDenote :: Text -> [BULK] -> Expectation
-text `shouldDenote` list = (parseTextNotation text >>= parseLazy (getStream $ SetVersion 1 0)) `shouldBe` Right list
+text `shouldDenote` list = (parseTextNotation text >>= parseLazy (getStream $ SetVersion 1 0)) `shouldBe` Right (Form list)
 
 unDigits :: [Word8] -> Integer
 unDigits = D.unDigits 256 . map fromIntegral
@@ -103,7 +105,7 @@ anySimpleRefBytes = (,) <$> anySimpleMarker <*> arbitraryByte
 anySimpleRef :: Gen BULK
 anySimpleRef = do
     (ns, name) <- anySimpleRefBytes
-    pure $ Reference (fromIntegral ns) (fromIntegral name)
+    pure $ Reference (via @Int ns) (fromIntegral name)
 
 -- Fixed ranges
 

@@ -1,10 +1,13 @@
+{-# LANGUAGE DefaultSignatures #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Test.QuickCheck.Instances.BULK where
 
 import Data.BULK (BULK (..))
+import Data.BULK.Types (Namespace)
 import Test.QuickCheck (Arbitrary (..), Gen, chooseInt, frequency, getSize, resize, sized)
 import Test.QuickCheck.Instances.ByteString ()
+import Witch.From (from)
 import Prelude hiding (words)
 
 instance Arbitrary BULK where
@@ -14,10 +17,13 @@ instance Arbitrary BULK where
     shrink (Array bs) = Array <$> shrink bs
     shrink (Reference ns name) = Reference <$> shrink ns <*> shrink name
 
+instance Arbitrary Namespace where
+    arbitrary = from <$> frequency [(4, chooseInt (0x10, 0x17)), (16, chooseInt (0x18, 0x7F)), (1, chooseInt (0x80, 0xFFFF))]
+
 nil, array, ref, simpleForm, biggerForm, form :: Gen BULK
 nil = pure Nil
 array = Array <$> arbitrary
-ref = Reference <$> frequency [(4, chooseInt (0x10, 0x17)), (16, chooseInt (0x18, 0x7F)), (1, chooseInt (0x80, 0xFFFF))] <*> chooseInt (0x00, 0xFF)
+ref = Reference <$> arbitrary <*> chooseInt (0x00, 0xFF)
 simpleForm = do
     operator <- ref
     operand <- arbitrary

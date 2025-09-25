@@ -34,12 +34,13 @@ import Text.Megaparsec (ErrorFancy (ErrorFail), MonadParsec (..), ParseError (Fa
 import Text.Megaparsec.Char (space)
 import Text.Megaparsec.Char.Lexer qualified as L
 
-import Data.BULK.Decode (BULK (..), VersionConstraint (ReadVersion), getStream, parseLazy)
+import Data.BULK.Decode (VersionConstraint (ReadVersion), getStream, parseLazy)
 import Data.BULK.Encode (encodeExpr, encodeNat)
+import Data.BULK.Types (BULK (..), Namespace (..))
 
-data Namespace = Namespace {marker :: Int, usedNames :: Map Text Int, availableNames :: [Int]}
+data NotationNS = NotationNS {namespace :: Namespace, usedNames :: Map Text Int, availableNames :: [Int]}
 
-data NamespaceMap = NamespaceMap {usedNamespaces :: Map Text Namespace, nextMarker :: Int}
+data NamespaceMap = NamespaceMap {usedNamespaces :: Map Text NotationNS, nextNamespace :: Namespace}
 
 type Parser = ParsecT String Text (State NamespaceMap)
 
@@ -49,10 +50,10 @@ parseTextNotation source = do
     builders <- flip evalState bulkProfile $ sequence <$> traverse parseTextToken lexemes
     pure $ BB.toLazyByteString $ mconcat builders
 
-parseTextFile :: FilePath -> IO (Either String [BULK])
+parseTextFile :: FilePath -> IO (Either String BULK)
 parseTextFile = parseTextFileWith lenientDecode ReadVersion
 
-parseTextFileWith :: OnDecodeError -> VersionConstraint -> FilePath -> IO (Either String [BULK])
+parseTextFileWith :: OnDecodeError -> VersionConstraint -> FilePath -> IO (Either String BULK)
 parseTextFileWith onerror constraint file = do
     bytes <- B.readFile file
     pure $ parseTextNotation (LT.toStrict $ LTE.decodeUtf8With onerror bytes) >>= parseLazy (getStream constraint)
@@ -61,7 +62,7 @@ bulkCoreNames :: (Integral a) => [(Text, a)]
 bulkCoreNames = zip (T.words "version true false ns package import define mnemonic/def ns-mnemonic verifiable-ns concat subst arg rest stringenc iana-charset codepage string string* blob nested-bulk unsigned-int signed-int fraction binary-float decimal-float binary-fixed decimal-fixed decimal2 prefix prefix* postfix postfix* arity") ([0x0 .. 0xD] ++ [0x10 .. 0x16] ++ [0x20 .. 0x27] ++ [0x30 .. 0x34])
 
 bulkProfile :: NamespaceMap
-bulkProfile = NamespaceMap{usedNamespaces = M.singleton "bulk" Namespace{marker = 0x10, usedNames = coreNames, availableNames = []}, nextMarker = 0x18}
+bulkProfile = NamespaceMap{usedNamespaces = M.singleton "bulk" NotationNS{namespace = CoreNamespace, usedNames = coreNames, availableNames = []}, nextNamespace = UnassociatedNamespace 0x18}
   where
     coreNames = M.fromList bulkCoreNames
 
@@ -153,23 +154,23 @@ ensureRef :: Text -> Text -> Parser BULK
 ensureRef nsMnemonic nameMnemonic = do
     ns <- ensureNamespace
     name <- ensureName ns
-    pure $ Reference ns.marker name
+    pure $ Reference ns.namespace name
   where
-    ensureNamespace :: Parser Namespace
+    ensureNamespace :: Parser NotationNS
     ensureNamespace = do
         mNs <- gets lookupNS
         maybe createNamespace pure mNs
-    ensureName :: Namespace -> Parser Int
+    ensureName :: NotationNS -> Parser Int
     ensureName ns = maybe (createName ns) pure $ M.lookup nameMnemonic ns.usedNames
-    lookupNS :: NamespaceMap -> Maybe Namespace
+    lookupNS :: NamespaceMap -> Maybe NotationNS
     lookupNS nss = M.lookup nsMnemonic nss.usedNamespaces
     createNamespace = do
         nss <- get
-        let marker = nss.nextMarker
-            newNamespace = Namespace{marker = marker, usedNames = M.empty, availableNames = [0 .. 255]}
-        put nss{usedNamespaces = M.insert nsMnemonic newNamespace nss.usedNamespaces, nextMarker = marker + 1}
+        let namespace = nss.nextNamespace
+            newNamespace = NotationNS{namespace = namespace, usedNames = M.empty, availableNames = [0 .. 255]}
+        put nss{usedNamespaces = M.insert nsMnemonic newNamespace nss.usedNamespaces, nextNamespace = succ namespace}
         pure newNamespace
-    createName :: Namespace -> Parser Int
+    createName :: NotationNS -> Parser Int
     createName ns = case ns.availableNames of
         (nextName : otherNames) -> do
             let ns' = ns{usedNames = M.insert nameMnemonic nextName ns.usedNames, availableNames = otherNames}

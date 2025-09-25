@@ -5,10 +5,9 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ViewPatterns #-}
 
-module Data.BULK.Encode (encode, encodeNat, pattern Nat, encodeExpr, unsafeEncodeBounded, boundedPutter)
+module Data.BULK.Encode (encode, pattern IntReference, encodeNat, pattern Nat, encodeExpr, unsafeEncodeBounded, boundedPutter)
 where
 
-import Data.BULK.Decode (BULK (..), toNat)
 import Data.Binary (Put, putWord8)
 import Data.Binary.Put (putWord16be, putWord32be, putWord64be, runPut)
 import Data.Bits (Bits (..))
@@ -17,6 +16,10 @@ import Data.ByteString.Lazy qualified as BS
 import Data.Foldable (find, traverse_)
 import Data.List.Extra (list)
 import Data.Maybe (fromMaybe)
+
+import Data.BULK.Decode (toNat)
+import Data.BULK.Types (BULK (..))
+import Witch (from)
 
 encode :: [BULK] -> BS.ByteString
 encode = BB.toLazyByteString . encodeSeq
@@ -34,9 +37,20 @@ encodeExpr (Array bs) =
         else BB.word8 3 <> encodeExpr (encodeNat len) <> BB.lazyByteString bs
   where
     len = BS.length bs
-encodeExpr (Reference ns name)
+encodeExpr (IntReference ns name)
     | ns < 0x7F = int ns <> int name
     | otherwise = foldMap int $ cutInWords ns ++ [name]
+
+pattern IntReference :: Int -> Int -> BULK
+pattern IntReference ns num <- (toIntRef -> Just (ns, num))
+    where
+        IntReference ns num = Reference (from ns) num
+
+{-# COMPLETE Nil, Form, Array, IntReference #-}
+
+toIntRef :: BULK -> Maybe (Int, Int)
+toIntRef (Reference ns num) = Just (from ns, num)
+toIntRef _ = Nothing
 
 encodeNat :: (Integral a, Bits a) => a -> BULK
 encodeNat = unsafeEncodeBounded unsafePutWord64s natEncoders

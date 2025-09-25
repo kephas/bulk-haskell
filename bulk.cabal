@@ -32,12 +32,15 @@ library
       Data.BULK.Eval
       Data.BULK.Lens
       Data.BULK.TextNotation
+      Data.BULK.ToFrom
+      Data.BULK.Types
   other-modules:
       Paths_bulk
   hs-source-dirs:
       src
   default-extensions:
       ImportQualifiedPost
+  ghc-options: -fplugin=Polysemy.Plugin -Wall
   build-depends:
       base >=4.7 && <5
     , binary
@@ -50,8 +53,11 @@ library
     , lens
     , megaparsec
     , mtl
+    , polysemy
+    , polysemy-plugin
     , string-interpolate
     , text
+    , witch
   default-language: Haskell2010
 
 executable bulk-cli
@@ -62,7 +68,7 @@ executable bulk-cli
       app
   default-extensions:
       ImportQualifiedPost
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N -Wall
+  ghc-options: -fplugin=Polysemy.Plugin -Wall -threaded -rtsopts -with-rtsopts=-N -Wall
   build-depends:
       base >=4.7 && <5
     , bits
@@ -72,9 +78,12 @@ executable bulk-cli
     , filepath
     , lens
     , optparse-simple
+    , polysemy
+    , polysemy-plugin
     , relude
     , string-interpolate
     , text
+    , witch
   default-language: Haskell2010
 
 test-suite bulk-test
@@ -89,7 +98,7 @@ test-suite bulk-test
       test
   default-extensions:
       ImportQualifiedPost
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N -Wall
+  ghc-options: -fplugin=Polysemy.Plugin -Wall -threaded -rtsopts -with-rtsopts=-N -Wall
   build-depends:
       QuickCheck
     , base >=4.7 && <5
@@ -100,8 +109,11 @@ test-suite bulk-test
     , digits
     , hspec
     , lens
+    , polysemy
+    , polysemy-plugin
     , quickcheck-instances
     , random
     , string-interpolate
     , text
+    , witch
   default-language: Haskell2010

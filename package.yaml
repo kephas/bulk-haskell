@@ -24,10 +24,17 @@ dependencies:
 - bytestring
 - digits
 - lens
+- polysemy
+- polysemy-plugin
 - string-interpolate
 - text
+- witch
 
 language: Haskell2010
+
+ghc-options:
+- -fplugin=Polysemy.Plugin
+- -Wall
 
 default-extensions:
 - ImportQualifiedPost

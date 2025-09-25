@@ -1,4 +1,5 @@
 {-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
@@ -12,12 +13,14 @@ import Data.List (nubBy)
 import Data.String.Interpolate (i)
 import Test.Hspec
 import Test.Hspec.QuickCheck (prop)
-import Test.QuickCheck (arbitrary, chooseInt, forAll, listOf, withMaxSuccess)
+import Test.QuickCheck (arbitrary, chooseInt, forAll, listOf, withMaxSuccess, (==>))
+import Witch (from, via)
 import Prelude hiding (readFile)
 
 import Data.BULK
+import Data.BULK.Core (pattern Core)
+import Data.BULK.Encode (pattern IntReference)
 import Test.BULK.Decode
-import Test.BULK.Encode
 import Test.QuickCheck.Instances.BULK ()
 
 main :: IO ()
@@ -47,13 +50,13 @@ spec = describe "BULK" $ do
                 describe "read references" $ do
                     prop "reads one-word marker references" $
                         forAll anySimpleRefBytes $ \(marker, ref) ->
-                            pack [marker, ref] `shouldParseTo` Reference (fromIntegral marker) (fromIntegral ref)
+                            pack [marker, ref] `shouldParseTo` Reference (via @Int marker) (fromIntegral ref)
                     prop "reads two-words marker references" $
                         forAll anySimpleRefBytes $ \(marker, ref) ->
-                            pack [0x7F, marker, ref] `shouldParseTo` Reference (0x7F + fromIntegral marker) (fromIntegral ref)
+                            pack [0x7F, marker, ref] `shouldParseTo` Reference (from @Int $ 0x7F + fromIntegral marker) (fromIntegral ref)
                     prop "reads three-words marker references" $
                         forAll anySimpleRefBytes $ \(marker, ref) ->
-                            pack [0x7F, 0xFF, marker, ref] `shouldParseTo` Reference (0x7F + 0xFF + fromIntegral marker) (fromIntegral ref)
+                            pack [0x7F, 0xFF, marker, ref] `shouldParseTo` Reference (from @Int $ 0x7F + 0xFF + fromIntegral marker) (fromIntegral ref)
                 it "rejects reserved markers" $
                     traverse_ readFailsOn reservedMarkers
             describe "files" $ do
@@ -64,22 +67,22 @@ spec = describe "BULK" $ do
                     readFile "test/bad nesting.bulk" `shouldReturn` badNesting
                 it "checks for version 1.0" $ do
                     readFile "test/missing version.bulk" `shouldReturn` Left "missing version"
-                    readFileWithVersion (SetVersion 1 0) "test/missing version.bulk" `shouldReturn` Right [Nil]
+                    readFileWithVersion (SetVersion 1 0) "test/missing version.bulk" `shouldReturn` Right (Form [Nil])
             describe "version and profile" $ do
                 it "checks for version 1.0" $ do
-                    parseStreamWith ReadVersion "\x01\x10\x00\x81\x80\x02" `shouldBe` Right [Form [Reference 16 0, 1, 0]]
-                    parseStreamWith ReadVersion "\x01\x10\x00\x81\x82\x02" `shouldBe` Right [Form [Reference 16 0, 1, 2]]
+                    parseStreamWith ReadVersion "\x01\x10\x00\x81\x80\x02" `shouldBe` Right (Form [Form [IntReference 16 0, 1, 0]])
+                    parseStreamWith ReadVersion "\x01\x10\x00\x81\x82\x02" `shouldBe` Right (Form [Form [IntReference 16 0, 1, 2]])
                     parseStreamWith ReadVersion "\x01\x10\x00\x82\x80\x02" `shouldBe` Left "this application only supports BULK version 1.x"
                     parseStreamWith ReadVersion "\x01\x10\x00\x81\x00\x00\x02" `shouldBe` Left "malformed version"
                     parseStreamWith ReadVersion "\0" `shouldBe` Left "missing version"
-                    parseStreamWith (SetVersion 1 0) "\0" `shouldBe` Right [Nil]
-                    parseStreamWith (SetVersion 1 2) "\0" `shouldBe` Right [Nil]
+                    parseStreamWith (SetVersion 1 0) "\0" `shouldBe` Right (Form [Nil])
+                    parseStreamWith (SetVersion 1 2) "\0" `shouldBe` Right (Form [Nil])
                     parseStreamWith (SetVersion 2 0) "\0" `shouldBe` Left "this application only supports BULK version 1.x"
         --
         -- Encoding
         describe "encoding" $ do
             it "encodes primitives" $ do
-                encode [Nil, Form [], Array "", Reference 16 0] `shouldBe` "\x00\x01\x02\xC0\x10\x00"
+                encode [Nil, Form [], Array "", IntReference 16 0] `shouldBe` "\x00\x01\x02\xC0\x10\x00"
             it "encodes natural numbers" $ do
                 map @Int encodeNat [0, 1, 0xFF, 0x100, 0xFFFF, 0x1_0000] `shouldBe` [Array "\0", Array "\1", Array "\xFF", Array "\1\0", Array "\xFF\xFF", Array "\0\1\0\0"]
                 map @Integer encodeNat [0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF] `shouldBe` [Array "\x00\x00\x00\x00\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"]
@@ -107,9 +110,9 @@ spec = describe "BULK" $ do
             prop "parses bigger decimals" $ forAll (chooseInt (64, maxBound)) $ \num ->
                 [i|#{num}|] `shouldDenote` [encodeNat num]
             it "parses bulk core references" $ do
-                "version" `shouldDenote` [Reference 16 0]
-                "( version 1 0 ) true false ( define 0x1800 ( subst ( concat ( arg 1 ) ( arg 2 ) ) ) )" `shouldDenote` [version 1 0, core 1, core 2, Form [core 6, Reference 24 0, Form [core 0x0B, Form [core 0x0A, Form [core 0x0C, Array "\1"], Form [core 0x0C, Array "\2"]]]]]
-                "( bulk:ns 0x1800 #[4] 0x0011-2233 ) ( bulk:ns-mnemonic 0x1800 )" `shouldDenote` [Form [core 3, Reference 24 0, Array "\x00\x11\x22\x33"], Form [core 8, Reference 24 0]]
+                "version" `shouldDenote` [IntReference 16 0]
+                "( version 1 0 ) true false ( define 0x1800 ( subst ( concat ( arg 1 ) ( arg 2 ) ) ) )" `shouldDenote` [version 1 0, Core 1, Core 2, Form [Core 6, IntReference 24 0, Form [Core 0x0B, Form [Core 0x0A, Form [Core 0x0C, Array "\1"], Form [Core 0x0C, Array "\2"]]]]]
+                "( bulk:ns 0x1800 #[4] 0x0011-2233 ) ( bulk:ns-mnemonic 0x1800 )" `shouldDenote` [Form [Core 3, IntReference 24 0, Array "\x00\x11\x22\x33"], Form [Core 8, IntReference 24 0]]
             it "parses UTF-8 strings" $ do
                 parseTextNotation [i|"foo"|] `shouldBe` Right "\xC3\&foo"
                 parseTextNotation [i|"foo" "quuux"|] `shouldBe` Right "\xC3\&foo\xC5quuux"
@@ -120,20 +123,20 @@ spec = describe "BULK" $ do
                 parseTextFile "test/primitives.bulktext" `shouldReturn` primitives
                 parseTextFile "test/bad nesting.bulktext" `shouldReturn` badNesting
             it "parses unknown references" $ do
-                "foo:bar quux:one foo:baz" `shouldDenote` (uncurry Reference <$> [(24, 0), (25, 0), (24, 1)])
+                "foo:bar quux:one foo:baz" `shouldDenote` (uncurry IntReference <$> [(24, 0), (25, 0), (24, 1)])
         --
         -- Core namespace and evaluation
         describe "core namespace" $ do
             it "has basic references" $ do
-                version 1 0 `shouldBe` Form [Reference 16 0, Array "\1", Array "\0"]
+                version 1 0 `shouldBe` Form [IntReference 16 0, Array "\1", Array "\0"]
             prop "has self-evaluating expressions" $ \expr ->
-                eval [expr] `shouldBe` [expr]
+                userForm expr ==> eval (Form [expr]) `shouldBe` Form [expr]
             prop "has definitions" $ do
                 rvs <- nubBy ((==) `on` fst) <$> listOf ((,) <$> anySimpleRef <*> arbitrary)
                 let refs = map fst rvs
                     values = map snd rvs
                     definitions = zipWith define refs values
-                pure $ eval (definitions ++ refs) `shouldBe` values
+                pure $ eval (Form $ definitions ++ refs) `shouldBe` Form values
             describe "parses numbers" $ do
                 it "small ints" $ for_ smallWords \w ->
                     encodeSmallInt w `shouldParseToInt` fromIntegral w
@@ -142,32 +145,39 @@ spec = describe "BULK" $ do
                     parseInts bigIntCases
             describe "encodes numbers" $ do
                 it "ints" $ do
-                    encodeInt @Int (-1) `shouldBe` Form [core 0x21, Array "\xFF"]
+                    encodeInt @Int (-1) `shouldBe` Form [Core 0x21, Array "\xFF"]
                     for_ bidirectionalIntCases \(kind, bytes, value) ->
-                        encodeInt value `shouldBe` Form [core kind, Array bytes]
+                        encodeInt value `shouldBe` Form [Core kind, Array bytes]
+        --
+        -- Parser monad
+        describe "Parser monad" $ do
+            it "parses Haskell values" $ do
+                decodeNotation "( version 1 0 ) ( 0x14-01 0x10-02 0x10-01 42 )" `shouldBe` Right (Foo False True 42)
+
     describe "slow tests" $ do
         prop "reads really big generic arrays" $ withMaxSuccess 20 $ test_bigger_arrays_decoding 3
 
-nesting, primitives, badNesting :: Either String [BULK]
-nesting = Right [version 1 0, Form [], Form [Nil, Form [Nil], Form []]]
+nesting, primitives, badNesting :: Either String BULK
+nesting = Right $ Form [version 1 0, Form [], Form [Nil, Form [Nil], Form []]]
 primitives =
-    Right
-        [ version 1 0
-        , Form
-            [ Nil
-            , Array "Hello world!"
-            , Array "\x2A"
-            , Array ""
-            , Array "\x40"
-            , Array "\x01\x00"
-            , Array "\x01\x00\x00\x00"
-            , Array "\x01\x23\x45\x67\x89\xAB\xCD\xEF"
-            , Reference 0x18 0x01
-            , Reference 0x18 0x02
-            , Reference 0x7E 0xFF
-            , Reference (0x7F + 0xFF + 0xBC) 0x1A
+    Right $
+        Form
+            [ version 1 0
+            , Form
+                [ Nil
+                , Array "Hello world!"
+                , Array "\x2A"
+                , Array ""
+                , Array "\x40"
+                , Array "\x01\x00"
+                , Array "\x01\x00\x00\x00"
+                , Array "\x01\x23\x45\x67\x89\xAB\xCD\xEF"
+                , IntReference 0x18 0x01
+                , IntReference 0x18 0x02
+                , IntReference 0x7E 0xFF
+                , IntReference (0x7F + 0xFF + 0xBC) 0x1A
+                ]
             ]
-        ]
 badNesting = Left "not enough data (while reading a form)"
 
 parseOnlyIntCases, bidirectionalIntCases :: [(Int, ByteString, Int)]
@@ -200,3 +210,15 @@ bidirectionalIntCases =
 bigIntCases :: [(Int, ByteString, Integer)]
 bigIntCases =
     [(0x21, "\x80\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00", -0x8000_0000_0000_0000_0000_0000_0000_0000)]
+
+userForm :: BULK -> Bool
+userForm (Form (Core _ : _)) = False
+userForm (Form children) = all userForm children
+userForm _ = True
+
+data Foo = Foo Bool Bool Int deriving (Eq, Show)
+
+instance FromBULK Foo where
+    parseBULK = withStream do
+        nextBULK >>= withForm (IntReference 0x14 0x01) do
+            Foo <$> nextBULK <*> nextBULK <*> nextBULK
