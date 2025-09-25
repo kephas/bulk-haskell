@@ -1,41 +1,51 @@
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE NoFieldSelectors #-}
+{-# OPTIONS_GHC -Wno-type-defaults #-}
 
 module Data.BULK.Core where
 
-import Data.BULK.Decode (BULK (Array, Form, Reference), parseLazy, toNat)
-import Data.BULK.Encode (boundedPutter, encodeNat, unsafeEncodeBounded)
 import Data.Binary.Get (getInt16be, getInt32be, getInt64be, getInt8)
 import Data.Binary.Put (putInt16be, putInt32be, putInt64be, putInt8)
 import Data.ByteString.Lazy qualified as BL
 import Data.Either.Extra (eitherToMaybe)
 import Data.Int (Int64)
 
+import Data.BULK.Decode (parseLazy, toNat)
+import Data.BULK.Encode (boundedPutter, encodeNat, unsafeEncodeBounded)
+import Data.BULK.Types (BULK (..), Namespace (CoreNamespace))
+
 version :: Int -> Int -> BULK
 version major minor =
-    Form [Reference 16 0, encodeNat major, encodeNat minor]
+    Form [Core 0x00, encodeNat major, encodeNat minor]
 
 define :: BULK -> BULK -> BULK
 define ref value =
-    Form [Reference 16 9, ref, value]
+    Form [Core 0x09, ref, value]
+
+pattern Core :: Int -> BULK
+pattern Core name = (Reference CoreNamespace name)
 
 -- | Extract a signed integer from a raw BULK expression
 toIntegral :: (Integral a) => BULK -> Maybe a
 toIntegral bulk =
     case bulk of
         Array _ -> toNat bulk
-        Form [Reference 16 0x20, array] -> toNat array
-        Form [Reference 16 0x21, ArraySize 1 bs] -> int getInt8 bs
-        Form [Reference 16 0x21, ArraySize 2 bs] -> int getInt16be bs
-        Form [Reference 16 0x21, ArraySize 4 bs] -> int getInt32be bs
-        Form [Reference 16 0x21, ArraySize 8 bs] -> int getInt64be bs
-        Form [Reference 16 0x21, ArrayBlocks n bs] -> bigInt n bs
+        Form [Core 0x20, array] -> toNat array
+        Form [Core 0x21, ArraySize 1 bs] -> int getInt8 bs
+        Form [Core 0x21, ArraySize 2 bs] -> int getInt16be bs
+        Form [Core 0x21, ArraySize 4 bs] -> int getInt32be bs
+        Form [Core 0x21, ArraySize 8 bs] -> int getInt64be bs
+        Form [Core 0x21, ArrayBlocks n bs] -> bigInt n bs
         _ -> Nothing
   where
     int get = eitherToMaybe . fmap fromIntegral . parseLazy get
     bigInt blocks = int (getBlocks blocks 0)
     getBlocks 1 acc = (acc +) . fromIntegral <$> getInt64be
-    getBlocks blocks acc = do
+    getBlocks blocks _acc = do
         nextBlock <- getInt64be
         getBlocks (blocks - 1) $ 2 ^ 64 * fromIntegral nextBlock
 
@@ -57,4 +67,4 @@ blockSized (Array bs) =
 blockSized _ = Nothing
 
 encodeInt :: (Integral a) => a -> BULK
-encodeInt num = Form [Reference 0x10 0x21, unsafeEncodeBounded undefined [boundedPutter putInt8, boundedPutter putInt16be, boundedPutter putInt32be, boundedPutter putInt64be] num]
+encodeInt num = Form [Reference CoreNamespace 0x21, unsafeEncodeBounded undefined [boundedPutter putInt8, boundedPutter putInt16be, boundedPutter putInt32be, boundedPutter putInt64be] num]
