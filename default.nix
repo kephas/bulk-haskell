@@ -2,5 +2,5 @@
 
 pkgs.haskellPackages.developPackage {
   root = ./.;
-  modifier = (pkgs.haskell.lib.compose.addBuildTools (with pkgs; [ cabal-install hpack haskell-language-server hlint ]));
+  modifier = (pkgs.haskell.lib.compose.addBuildTools (with pkgs; [ cabal-install hpack haskell-language-server just ghcid hlint ]));
 }
