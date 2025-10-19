@@ -123,7 +123,7 @@ toNat bulk =
   where
     addWord num word = num * 256 + fromIntegral word
 
-pattern Nat :: (Integral a) => a -> BULK
+pattern Nat :: Int -> BULK
 pattern Nat num <- (toNat -> Just num)
 
 split26 :: (Integral a) => Word8 -> (Word8, a)
