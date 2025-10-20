@@ -112,8 +112,8 @@ spec = describe "BULK" $ do
                 [i|#{num}|] `shouldDenote` [encodeNat num]
             it "parses bulk core references" $ do
                 "version" `shouldDenote` [IntReference 16 0]
-                "( version 1 0 ) true false ( define 0x1800 ( subst ( concat ( arg 1 ) ( arg 2 ) ) ) )" `shouldDenote` [version 1 0, Core 1, Core 2, Form [Core 6, IntReference 24 0, Form [Core 0x0B, Form [Core 0x0A, Form [Core 0x0C, Array "\1"], Form [Core 0x0C, Array "\2"]]]]]
-                "( bulk:ns 0x1800 #[4] 0x0011-2233 ) ( bulk:ns-mnemonic 0x1800 )" `shouldDenote` [Form [Core 3, IntReference 24 0, Array "\x00\x11\x22\x33"], Form [Core 8, IntReference 24 0]]
+                "( version 1 0 ) true false ( define 0x1400 ( subst ( concat ( arg 1 ) ( arg 2 ) ) ) )" `shouldDenote` [version 1 0, Core 1, Core 2, Form [Core 6, IntReference 0x14 0, Form [Core 0x0B, Form [Core 0x0A, Form [Core 0x0C, Array "\1"], Form [Core 0x0C, Array "\2"]]]]]
+                "( bulk:ns 0x1400 #[4] 0x0011-2233 ) ( bulk:ns-mnemonic 0x1400 )" `shouldDenote` [Form [Core 3, IntReference 0x14 0, Array "\x00\x11\x22\x33"], Form [Core 8, IntReference 0x14 0]]
             it "parses UTF-8 strings" $ do
                 parseTextNotation [i|"foo"|] `shouldBe` Right "\xC3\&foo"
                 parseTextNotation [i|"foo" "quuux"|] `shouldBe` Right "\xC3\&foo\xC5quuux"
@@ -124,7 +124,7 @@ spec = describe "BULK" $ do
                 parseTextFile "test/primitives.bulktext" `shouldReturn` primitives
                 parseTextFile "test/bad nesting.bulktext" `shouldReturn` badNesting
             it "parses unknown references" $ do
-                "foo:bar quux:one foo:baz" `shouldDenote` (uncurry IntReference <$> [(24, 0), (25, 0), (24, 1)])
+                "foo:bar quux:one foo:baz" `shouldDenote` (uncurry IntReference <$> [(0x14, 0), (0x15, 0), (0x14, 1)])
         --
         -- Core namespace and evaluation
         describe "core namespace" $ do
@@ -176,8 +176,8 @@ primitives =
                 , Array "\x01\x00"
                 , Array "\x01\x00\x00\x00"
                 , Array "\x01\x23\x45\x67\x89\xAB\xCD\xEF"
-                , IntReference 0x18 0x01
-                , IntReference 0x18 0x02
+                , IntReference 0x14 0x01
+                , IntReference 0x14 0x02
                 , IntReference 0x7E 0xFF
                 , IntReference (0x7F + 0xFF + 0xBC) 0x1A
                 ]
