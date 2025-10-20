@@ -1,13 +1,14 @@
 {-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeApplications #-}
 
 module Test.BULK.Decode where
 
 import Control.Exception (ErrorCall, assert, handle)
-import Control.Lens hiding (from)
+import Control.Lens hiding (cons, from)
 import Data.Bits (Bits (..))
-import Data.ByteString.Lazy (ByteString, pack, singleton)
+import Data.ByteString.Lazy (ByteString, cons, pack, singleton)
 import Data.Digits qualified as D
 import Data.Either (isLeft)
 import Data.Foldable (traverse_)
@@ -28,7 +29,7 @@ parseStreamWith :: VersionConstraint -> ByteString -> Either String BULK
 parseStreamWith version = parseLazy (getStream version)
 
 readFailsOn :: Word8 -> Expectation
-readFailsOn word = isLeft (parseLazy getExpression $ singleton word) `shouldBe` True
+readFailsOn word = word `shouldSatisfy` (\w -> isLeft $ parseLazy getExpression $ cons w "\0\0")
 
 shouldFail :: (Show a, Show b) => Either a b -> Expectation
 shouldFail result = result `shouldSatisfy` isLeft
