@@ -17,6 +17,7 @@ import Data.Int (Int64)
 import Data.BULK.Decode (parseLazy, toNat)
 import Data.BULK.Encode (boundedPutter, encodeNat, unsafeEncodeBounded)
 import Data.BULK.Types (BULK (..), Namespace (CoreNamespace))
+import Data.Word (Word8)
 
 version :: Int -> Int -> BULK
 version major minor =
@@ -26,7 +27,7 @@ define :: BULK -> BULK -> BULK
 define ref value =
     Form [Core 0x09, ref, value]
 
-pattern Core :: Int -> BULK
+pattern Core :: Word8 -> BULK
 pattern Core name = (Reference CoreNamespace name)
 
 -- | Extract a signed integer from a raw BULK expression

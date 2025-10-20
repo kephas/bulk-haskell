@@ -4,13 +4,14 @@
 module Data.BULK.Types where
 
 import Data.ByteString.Lazy (ByteString)
+import Data.Word (Word8)
 import Witch (From (..))
 
 data BULK
     = Nil
     | Form [BULK]
     | Array ByteString
-    | Reference Namespace Int
+    | Reference Namespace Word8
     deriving (Eq, Ord, Show)
 
 data Namespace

@@ -38,7 +38,7 @@ import Data.BULK.Decode (VersionConstraint (ReadVersion), getStream, parseLazy)
 import Data.BULK.Encode (encodeExpr, encodeNat)
 import Data.BULK.Types (BULK (..), Namespace (..))
 
-data NotationNS = NotationNS {namespace :: Namespace, usedNames :: Map Text Int, availableNames :: [Int]}
+data NotationNS = NotationNS {namespace :: Namespace, usedNames :: Map Text Word8, availableNames :: [Word8]}
 
 data NamespaceMap = NamespaceMap {usedNamespaces :: Map Text NotationNS, nextNamespace :: Namespace}
 
@@ -160,7 +160,7 @@ ensureRef nsMnemonic nameMnemonic = do
     ensureNamespace = do
         mNs <- gets lookupNS
         maybe createNamespace pure mNs
-    ensureName :: NotationNS -> Parser Int
+    ensureName :: NotationNS -> Parser Word8
     ensureName ns = maybe (createName ns) pure $ M.lookup nameMnemonic ns.usedNames
     lookupNS :: NamespaceMap -> Maybe NotationNS
     lookupNS nss = M.lookup nsMnemonic nss.usedNamespaces
@@ -170,7 +170,7 @@ ensureRef nsMnemonic nameMnemonic = do
             newNamespace = NotationNS{namespace = namespace, usedNames = M.empty, availableNames = [0 .. 255]}
         put nss{usedNamespaces = M.insert nsMnemonic newNamespace nss.usedNamespaces, nextNamespace = succ namespace}
         pure newNamespace
-    createName :: NotationNS -> Parser Int
+    createName :: NotationNS -> Parser Word8
     createName ns = case ns.availableNames of
         (nextName : otherNames) -> do
             let ns' = ns{usedNames = M.insert nameMnemonic nextName ns.usedNames, availableNames = otherNames}

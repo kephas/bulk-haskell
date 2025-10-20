@@ -11,6 +11,7 @@ import Data.Foldable (for_, traverse_)
 import Data.Function (on)
 import Data.List (nubBy)
 import Data.String.Interpolate (i)
+import Data.Word (Word8)
 import Test.Hspec
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck (arbitrary, chooseInt, forAll, listOf, withMaxSuccess, (==>))
@@ -180,7 +181,7 @@ primitives =
             ]
 badNesting = Left "not enough data (while reading a form)"
 
-parseOnlyIntCases, bidirectionalIntCases :: [(Int, ByteString, Int)]
+parseOnlyIntCases, bidirectionalIntCases :: [(Word8, ByteString, Int)]
 parseOnlyIntCases =
     [ (0x20, "\x01", 0x1)
     , (0x21, "\x00\x01", 0x1)
@@ -207,7 +208,7 @@ bidirectionalIntCases =
     , (0x21, "\x80\x00\x00\x00\x00\x00\x00\x01", -0x7FFF_FFFF_FFFF_FFFF)
     ]
 
-bigIntCases :: [(Int, ByteString, Integer)]
+bigIntCases :: [(Word8, ByteString, Integer)]
 bigIntCases =
     [(0x21, "\x80\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00", -0x8000_0000_0000_0000_0000_0000_0000_0000)]
 
