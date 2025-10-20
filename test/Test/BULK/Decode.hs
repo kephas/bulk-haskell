@@ -30,6 +30,9 @@ parseStreamWith version = parseLazy (getStream version)
 readFailsOn :: Word8 -> Expectation
 readFailsOn word = isLeft (parseLazy getExpression $ singleton word) `shouldBe` True
 
+shouldFail :: (Show a, Show b) => Either a b -> Expectation
+shouldFail result = result `shouldSatisfy` isLeft
+
 test_bigger_arrays_decoding :: Int -> Property
 test_bigger_arrays_decoding size =
     forAll (arraySizedWith size) $ \array ->
