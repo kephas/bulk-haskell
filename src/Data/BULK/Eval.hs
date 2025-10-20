@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -18,24 +19,41 @@ import Polysemy.State (State, evalState, gets, modify)
 
 import Data.BULK.Core (pattern Core)
 import Data.BULK.Encode (pattern Nat)
-import Data.BULK.Types (BULK (..))
+import Data.BULK.Types (BULK (..), FullNamespaceDefinition (..), Namespace (..))
+import Data.List (find)
 
-data Scope a b = Scope {_namespaces :: M.Map a b, _definitions :: M.Map BULK BULK}
+data Scope = Scope
+    { _associatedNamespaces :: M.Map Int FullNamespaceDefinition
+    , _definitions :: M.Map BULK BULK
+    , _knownNamespaces :: [FullNamespaceDefinition]
+    }
 
 makeLenses ''Scope
 
-emptyScope :: Scope a b
-emptyScope = Scope{_namespaces = M.empty, _definitions = M.empty}
+emptyScope :: [FullNamespaceDefinition] -> Scope
+emptyScope nss = Scope{_associatedNamespaces = M.empty, _definitions = M.empty, _knownNamespaces = nss}
 
-eval :: BULK -> BULK
-eval bulk = fromMaybe bulk $ run $ evalState emptyScope $ evalExpr bulk
+eval :: [FullNamespaceDefinition] -> BULK -> BULK
+eval nss bulk = fromMaybe bulk $ run $ evalState (emptyScope nss) $ evalExpr bulk
 
-evalExpr :: (Member (State (Scope a b)) r) => BULK -> Sem r (Maybe BULK)
+evalExpr :: (Member (State Scope) r) => BULK -> Sem r (Maybe BULK)
+evalExpr (Form [Core 0x03, Nat marker, expr]) = do
+    let matchNS :: FullNamespaceDefinition -> Bool
+        matchNS ns = ns.matchID expr
+    foundNS <- gets (find matchNS . view knownNamespaces)
+    Nothing <$ modify (over associatedNamespaces (M.alter (const foundNS) marker))
 evalExpr (Form [Core 0x09, ref, expr]) =
     Nothing <$ modify (over definitions (M.insert ref expr))
 evalExpr (Form [Core 0x00, Nat @Int _, Nat @Int _]) =
     pure Nothing
 evalExpr (Form content) = do
     Just . Form . catMaybes <$> traverse @[] evalExpr content
+evalExpr (Reference unassoc@(UnassociatedNamespace marker) name) = do
+    ns <- fromMaybe unassoc <$> gets (fmap (AssociatedNamespace marker) . M.lookup marker . view associatedNamespaces)
+    retrieveDefinition $ Reference ns name
 evalExpr expr =
+    retrieveDefinition expr
+
+retrieveDefinition :: (Member (State Scope) r) => BULK -> Sem r (Maybe BULK)
+retrieveDefinition expr =
     Just <$> gets (M.findWithDefault expr expr . view definitions)
