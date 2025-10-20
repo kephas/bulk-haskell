@@ -131,13 +131,13 @@ spec = describe "BULK" $ do
             it "has basic references" $ do
                 version 1 0 `shouldBe` Form [IntReference 16 0, Array "\1", Array "\0"]
             prop "has self-evaluating expressions" $ \expr ->
-                userForm expr ==> eval (Form [expr]) `shouldBe` Form [expr]
+                userForm expr ==> eval [] (Form [expr]) `shouldBe` Form [expr]
             prop "has definitions" $ do
                 rvs <- nubBy ((==) `on` fst) <$> listOf ((,) <$> anySimpleRef <*> arbitrary)
                 let refs = map fst rvs
                     values = map snd rvs
                     definitions = zipWith define refs values
-                pure $ eval (Form $ definitions ++ refs) `shouldBe` Form values
+                pure $ eval [] (Form $ definitions ++ refs) `shouldBe` Form values
             describe "parses numbers" $ do
                 it "small ints" $ for_ smallWords \w ->
                     encodeSmallInt w `shouldParseToInt` fromIntegral w
@@ -153,7 +153,8 @@ spec = describe "BULK" $ do
         -- Parser monad
         describe "Parser monad" $ do
             it "parses Haskell values" $ do
-                decodeNotation "( version 1 0 ) ( 0x14-01 0x10-02 0x10-01 42 )" `shouldBe` Right (Foo False True 42)
+                decodeNotation [] "( version 1 0 ) ( 0x14-01 0x10-02 0x10-01 42 )" `shouldBe` Right (Foo False True 42)
+                decodeNotation [foo] "( version 1 0 ) ( 0x10-03 w6[20] #[6] 0x0A0B0C0D0E0F ) ( 0x14-00 0x10-02 0x10-01 42 )" `shouldBe` Right (FooBar False True 42)
 
     describe "slow tests" $ do
         prop "reads really big generic arrays" $ withMaxSuccess 20 $ test_bigger_arrays_decoding 3
@@ -221,5 +222,23 @@ data Foo = Foo Bool Bool Int deriving (Eq, Show)
 
 instance FromBULK Foo where
     parseBULK = withStream do
-        nextBULK >>= withForm (IntReference 0x14 0x01) do
+        nextBULK >>= withForm (rawName 0x14 0x01) do
             Foo <$> nextBULK <*> nextBULK <*> nextBULK
+
+foo :: FullNamespaceDefinition
+foo =
+    defineNamespace $
+        NamespaceDefinition
+            { matchID = (== Array "\x0A\x0B\x0C\x0D\x0E\x0F")
+            , mnemonic = "foo"
+            , names =
+                [ SelfEval{marker = 0x00, mnemonic = "bar"}
+                ]
+            }
+
+data FooBar = FooBar Bool Bool Int deriving (Eq, Show)
+
+instance FromBULK FooBar where
+    parseBULK = withStream do
+        nextBULK >>= withForm (nsName foo "bar") do
+            FooBar <$> nextBULK <*> nextBULK <*> nextBULK

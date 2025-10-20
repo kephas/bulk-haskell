@@ -5,9 +5,11 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MonoLocalBinds #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Data.BULK.ToFrom where
 
@@ -20,10 +22,11 @@ import Polysemy.State (State, evalState, get, put)
 import Control.Monad ((>=>))
 import Data.BULK.Core (pattern Core)
 import Data.BULK.Decode (VersionConstraint (SetVersion), getStream, parseLazy)
-import Data.BULK.Encode (pattern Nat)
+import Data.BULK.Encode (pattern IntReference, pattern Nat)
 import Data.BULK.Eval (eval)
 import Data.BULK.TextNotation (parseTextNotation)
-import Data.BULK.Types (BULK (..))
+import Data.BULK.Types (BULK (..), FullNamespaceDefinition (..), MatchBULK (..), NameDefinition (..), Namespace (AssociatedNamespace))
+import Data.List (find)
 import Data.Text (Text)
 import Data.Word (Word8)
 
@@ -31,18 +34,23 @@ class FromBULK a where
     parseBULK :: BULK -> Parser a
 
 fromBULK :: (FromBULK a) => BULK -> Either String a
-fromBULK = runParser . parseBULK . eval
+fromBULK = fromBULKWith []
 
-decode :: (FromBULK a) => ByteString -> Either String a
-decode = parseLazy (getStream $ SetVersion 1 0) >=> fromBULK
+fromBULKWith :: (FromBULK a) => [FullNamespaceDefinition] -> BULK -> Either String a
+fromBULKWith nss = runParser . parseBULK . eval nss
 
-decodeNotation :: (FromBULK a) => Text -> Either String a
-decodeNotation = parseTextNotation >=> decode
+decode :: (FromBULK a) => [FullNamespaceDefinition] -> ByteString -> Either String a
+decode nss = parseLazy (getStream $ SetVersion 1 0) >=> fromBULKWith nss
 
-withForm :: (FromBULK a) => BULK -> Parser a -> BULK -> Parser a
-withForm ref parser (Form (op : content))
-    | ref == op = put (Just content) >> parser
-    | otherwise = fail [i|not the expected operator: (#{op}) (expected (#{ref}))|]
+decodeNotation :: (FromBULK a) => [FullNamespaceDefinition] -> Text -> Either String a
+decodeNotation nss = parseTextNotation >=> decode nss
+
+withForm :: (FromBULK a) => MatchBULK -> Parser a -> BULK -> Parser a
+withForm match parser (Form (op : content))
+    | match.match op = put (Just content) >> parser
+    | otherwise = fail [i|not the expected operator: (#{op}) (expected (#{expected}))|]
+  where
+    expected = match.expected
 withForm _ref _parser bulk = notExpected "form" bulk
 
 withStream :: (FromBULK a) => Parser a -> BULK -> Parser a
@@ -81,3 +89,22 @@ type Parser a = Sem '[Fail, State (Maybe [BULK])] a
 
 runParser :: Parser a -> Either String a
 runParser = run . evalState Nothing . runFail
+
+rawName :: Int -> Word8 -> MatchBULK
+rawName marker name = MatchBULK{..}
+  where
+    ref = IntReference marker name
+    match = (== ref)
+    expected = [i|#{ref}|]
+
+nsName :: FullNamespaceDefinition -> Text -> MatchBULK
+nsName ns1@(FullNamespaceDefinition{..}) mnemonic1 = MatchBULK{..}
+  where
+    match :: BULK -> Bool
+    match (Reference (AssociatedNamespace _ ns2@(FullNamespaceDefinition{})) name) = maybe False (matchDef ns2 name) foundNameDef
+    match _ = False
+    foundNameDef :: Maybe NameDefinition
+    foundNameDef = find (\name -> name.mnemonic == mnemonic1) names
+    matchDef :: FullNamespaceDefinition -> Word8 -> NameDefinition -> Bool
+    matchDef ns2 name def = ns1 == ns2 && name == def.marker
+    expected = [i|#{mnemonic}:#{mnemonic1}|]
