@@ -70,6 +70,15 @@ nextBULK = do
             put $ Just xs
             parseBULK x
 
+list :: (FromBULK a) => Parser [a]
+list = do
+    context <- get
+    case context of
+        Nothing -> fail "cannot get a list of BULK expressions outside of a form"
+        Just xs -> do
+            put $ Just []
+            traverse parseBULK xs
+
 notExpected :: (MonadFail m) => String -> BULK -> m a
 notExpected expected value = fail [i|not a #{expected}: (#{value})|]
 
@@ -84,6 +93,9 @@ instance FromBULK Int where
 
 instance FromBULK BULK where
     parseBULK = pure
+
+instance (FromBULK a) => FromBULK [a] where
+    parseBULK = withSequence list
 
 type Parser a = Sem '[Fail, State (Maybe [BULK])] a
 

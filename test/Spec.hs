@@ -138,6 +138,8 @@ spec = describe "BULK" $ do
                     values = map snd rvs
                     definitions = zipWith define refs values
                 pure $ eval [] (Form $ definitions ++ refs) `shouldBe` Form values
+            it "respect scoping rule" do
+                shouldFail $ decodeNotation @[[Int]] [] "( ( bulk:define 0x1400 42 ) 0x1400 ) ( 0x1400 )"
             describe "parses numbers" $ do
                 it "small ints" $ for_ smallWords \w ->
                     encodeSmallInt w `shouldParseToInt` fromIntegral w

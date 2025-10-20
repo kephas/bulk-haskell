@@ -15,7 +15,7 @@ import Control.Lens (makeLenses, over, view)
 import Data.Map.Strict qualified as M
 import Data.Maybe (catMaybes, fromMaybe)
 import Polysemy (Member, Sem, run)
-import Polysemy.State (State, evalState, gets, modify)
+import Polysemy.State (State, evalState, get, gets, modify)
 
 import Data.BULK.Core (pattern Core)
 import Data.BULK.Encode (pattern Nat)
@@ -42,12 +42,14 @@ evalExpr (Form [Core 0x03, Nat marker, expr]) = do
         matchNS ns = ns.matchID expr
     foundNS <- gets (find matchNS . view knownNamespaces)
     Nothing <$ modify (over associatedNamespaces (M.alter (const foundNS) marker))
-evalExpr (Form [Core 0x09, ref, expr]) =
+evalExpr (Form [Core 0x06, ref, expr]) =
     Nothing <$ modify (over definitions (M.insert ref expr))
 evalExpr (Form [Core 0x00, Nat @Int _, Nat @Int _]) =
     pure Nothing
 evalExpr (Form content) = do
-    Just . Form . catMaybes <$> traverse @[] evalExpr content
+    scope <- get
+    let evaledContent = catMaybes $ run $ evalState scope $ traverse @[] evalExpr content
+    pure $ Just $ Form evaledContent
 evalExpr (Reference unassoc@(UnassociatedNamespace marker) name) = do
     ns <- fromMaybe unassoc <$> gets (fmap (AssociatedNamespace marker) . M.lookup marker . view associatedNamespaces)
     retrieveDefinition $ Reference ns name

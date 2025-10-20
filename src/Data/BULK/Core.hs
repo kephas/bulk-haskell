@@ -25,7 +25,7 @@ version major minor =
 
 define :: BULK -> BULK -> BULK
 define ref value =
-    Form [Core 0x09, ref, value]
+    Form [Core 0x06, ref, value]
 
 pattern Core :: Word8 -> BULK
 pattern Core name = (Reference CoreNamespace name)
