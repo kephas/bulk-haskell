@@ -23,7 +23,7 @@ instance Arbitrary Namespace where
 nil, array, ref, simpleForm, biggerForm, form :: Gen BULK
 nil = pure Nil
 array = Array <$> arbitrary
-ref = Reference <$> arbitrary <*> chooseInt (0x00, 0xFF)
+ref = Reference <$> arbitrary <*> arbitrary
 simpleForm = do
     operator <- ref
     operand <- arbitrary

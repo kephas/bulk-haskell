@@ -19,6 +19,7 @@ import Data.Maybe (fromMaybe)
 
 import Data.BULK.Decode (toNat)
 import Data.BULK.Types (BULK (..))
+import Data.Word (Word8)
 import Witch (from)
 
 encode :: [BULK] -> BS.ByteString
@@ -38,17 +39,17 @@ encodeExpr (Array bs) =
   where
     len = BS.length bs
 encodeExpr (IntReference ns name)
-    | ns < 0x7F = int ns <> int name
-    | otherwise = foldMap int $ cutInWords ns ++ [name]
+    | ns < 0x7F = int ns <> BB.word8 name
+    | otherwise = foldMap int $ cutInWords ns ++ [fromIntegral name]
 
-pattern IntReference :: Int -> Int -> BULK
+pattern IntReference :: Int -> Word8 -> BULK
 pattern IntReference ns num <- (toIntRef -> Just (ns, num))
     where
         IntReference ns num = Reference (from ns) num
 
 {-# COMPLETE Nil, Form, Array, IntReference #-}
 
-toIntRef :: BULK -> Maybe (Int, Int)
+toIntRef :: BULK -> Maybe (Int, Word8)
 toIntRef (Reference ns num) = Just (from ns, num)
 toIntRef _ = Nothing
 

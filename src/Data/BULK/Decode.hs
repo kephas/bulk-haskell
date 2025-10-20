@@ -68,11 +68,12 @@ getArray = do
 getReference :: Word8 -> Get BULK
 getReference marker = do
     ns <- bool getSpecial pure (marker < 0x7F) $ fromIntegral marker
-    Reference (from ns) <$> getInt
+    Reference (from ns) <$> getWord8
   where
     getSpecial acc = do
         next <- getInt
         bool pure getSpecial (next == 0xFF) $ acc + next
+    getInt :: Get Int
     getInt = fromIntegral <$> getWord8
 
 data ParseContext = AtTopLevel | InForm

@@ -25,6 +25,7 @@ import Data.BULK.Eval (eval)
 import Data.BULK.TextNotation (parseTextNotation)
 import Data.BULK.Types (BULK (..))
 import Data.Text (Text)
+import Data.Word (Word8)
 
 class FromBULK a where
     parseBULK :: BULK -> Parser a
