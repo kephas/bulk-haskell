@@ -28,6 +28,7 @@ dependencies:
 - polysemy-plugin
 - string-interpolate
 - text
+- vary
 - witch
 
 language: Haskell2010
@@ -37,6 +38,7 @@ ghc-options:
 - -Wall
 
 default-extensions:
+- DataKinds
 - ImportQualifiedPost
 
 library:

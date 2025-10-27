@@ -4,13 +4,13 @@
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE NoFieldSelectors #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Data.BULK.TextNotation where
 
 import Control.Monad.State (MonadState (..), State, evalState, gets, modify, runState)
-import Data.Bifunctor (first)
 import Data.Bits ((.|.))
 import Data.ByteString.Builder qualified as BB
 import Data.ByteString.Lazy (ByteString)
@@ -37,6 +37,10 @@ import Text.Megaparsec.Char.Lexer qualified as L
 import Data.BULK.Decode (VersionConstraint (ReadVersion), getStream, parseLazy)
 import Data.BULK.Encode (encodeExpr, encodeNat)
 import Data.BULK.Types (BULK (..), Namespace (..))
+import Data.Maybe (fromMaybe)
+import Vary qualified
+import Vary.Extra (fromEither1Map)
+import Vary.VEither (VEither, veither)
 
 data NotationNS = NotationNS {namespace :: Namespace, usedNames :: Map Text Word8, availableNames :: [Word8]}
 
@@ -44,16 +48,16 @@ data NamespaceMap = NamespaceMap {usedNamespaces :: Map Text NotationNS, nextNam
 
 type Parser = ParsecT String Text (State NamespaceMap)
 
-parseTextNotation :: Text -> Either String ByteString
+parseTextNotation :: Text -> VEither '[String] ByteString
 parseTextNotation source = do
     lexemes <- runParser showFail lexerP source
     builders <- flip evalState bulkProfile $ sequence <$> traverse parseTextToken lexemes
     pure $ BB.toLazyByteString $ mconcat builders
 
-parseTextFile :: FilePath -> IO (Either String BULK)
+parseTextFile :: FilePath -> IO (VEither '[String] BULK)
 parseTextFile = parseTextFileWith lenientDecode ReadVersion
 
-parseTextFileWith :: OnDecodeError -> VersionConstraint -> FilePath -> IO (Either String BULK)
+parseTextFileWith :: OnDecodeError -> VersionConstraint -> FilePath -> IO (VEither '[String] BULK)
 parseTextFileWith onerror constraint file = do
     bytes <- B.readFile file
     pure $ parseTextNotation (LT.toStrict $ LTE.decodeUtf8With onerror bytes) >>= parseLazy (getStream constraint)
@@ -78,7 +82,7 @@ lexerP =
 tokenSyntaxP :: Parser Text
 tokenSyntaxP = fmap fst $ match $ some $ satisfy $ not . isSpace
 
-parseTextToken :: Text -> State NamespaceMap (Either String BB.Builder)
+parseTextToken :: Text -> State NamespaceMap (VEither '[String] BB.Builder)
 parseTextToken "nil" = pure $ w8 0
 parseTextToken "(" = pure $ w8 1
 parseTextToken ")" = pure $ w8 2
@@ -217,15 +221,15 @@ testP = choice (zipWith mkParser ["foo-bar", "foo"] [1, 2]) <* eof
   where
     mkParser text int = try $ chunk text $> int
 
-runParser :: (ParseErrorBundle Text String -> String) -> Parser a -> Text -> Either String a
+runParser :: (ParseErrorBundle Text String -> String) -> Parser a -> Text -> VEither '[String] a
 runParser mapError parser =
-    first mapError . flip evalState bulkProfile . runParserT parser "-"
+    fromEither1Map mapError . flip evalState bulkProfile . runParserT parser "-"
 
-runParserM :: (MonadState NamespaceMap m) => (ParseErrorBundle Text String -> String) -> Parser a -> Text -> m (Either String a)
+runParserM :: (MonadState NamespaceMap m) => (ParseErrorBundle Text String -> String) -> Parser a -> Text -> m (VEither '[String] a)
 runParserM mapError parser text = do
     result <- state $ runState $ runParserT parser "-" text
-    pure $ first mapError result
+    pure $ fromEither1Map mapError result
 
 debugParse :: (Show a) => Parser a -> Text -> IO ()
 debugParse parser text = do
-    putStrLn $ either id show (runParser errorBundlePretty parser text)
+    putStrLn $ veither (fromMaybe "" . Vary.into) show (runParser errorBundlePretty parser text)

@@ -11,13 +11,13 @@ module Data.BULK.Core where
 import Data.Binary.Get (getInt16be, getInt32be, getInt64be, getInt8)
 import Data.Binary.Put (putInt16be, putInt32be, putInt64be, putInt8)
 import Data.ByteString.Lazy qualified as BL
-import Data.Either.Extra (eitherToMaybe)
 import Data.Int (Int64)
 
 import Data.BULK.Decode (parseLazy, toNat)
 import Data.BULK.Encode (boundedPutter, encodeNat, unsafeEncodeBounded)
 import Data.BULK.Types (BULK (..), Namespace (CoreNamespace))
 import Data.Word (Word8)
+import Vary.Extra (veitherToMaybe)
 
 version :: Int -> Int -> BULK
 version major minor =
@@ -43,7 +43,7 @@ toIntegral bulk =
         Form [Core 0x21, ArrayBlocks n bs] -> bigInt n bs
         _ -> Nothing
   where
-    int get = eitherToMaybe . fmap fromIntegral . parseLazy get
+    int get = veitherToMaybe . fmap fromIntegral . parseLazy get
     bigInt blocks = int (getBlocks blocks 0)
     getBlocks 1 acc = (acc +) . fromIntegral <$> getInt64be
     getBlocks blocks _acc = do

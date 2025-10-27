@@ -35,11 +35,13 @@ library
       Data.BULK.ToFrom
       Data.BULK.Types
       Data.BULK.Unsafe
+      Vary.Extra
   other-modules:
       Paths_bulk
   hs-source-dirs:
       src
   default-extensions:
+      DataKinds
       ImportQualifiedPost
   ghc-options: -fplugin=Polysemy.Plugin -Wall
   build-depends:
@@ -58,6 +60,7 @@ library
     , polysemy-plugin
     , string-interpolate
     , text
+    , vary
     , witch
   default-language: Haskell2010
 
@@ -68,6 +71,7 @@ executable bulk-cli
   hs-source-dirs:
       app
   default-extensions:
+      DataKinds
       ImportQualifiedPost
   ghc-options: -fplugin=Polysemy.Plugin -Wall -threaded -rtsopts -with-rtsopts=-N -Wall
   build-depends:
@@ -84,6 +88,7 @@ executable bulk-cli
     , relude
     , string-interpolate
     , text
+    , vary
     , witch
   default-language: Haskell2010
 
@@ -98,6 +103,7 @@ test-suite bulk-test
   hs-source-dirs:
       test
   default-extensions:
+      DataKinds
       ImportQualifiedPost
   ghc-options: -fplugin=Polysemy.Plugin -Wall -threaded -rtsopts -with-rtsopts=-N -Wall
   build-depends:
@@ -116,5 +122,6 @@ test-suite bulk-test
     , random
     , string-interpolate
     , text
+    , vary
     , witch
   default-language: Haskell2010

@@ -7,7 +7,6 @@ module Data.BULK.Lens where
 import Control.Lens
 import Data.Bits (Bits)
 import Data.ByteString.Lazy (ByteString)
-import Data.Either.Extra (eitherToMaybe)
 import Data.List qualified as List
 import Data.Text (Text)
 
@@ -16,6 +15,7 @@ import Data.BULK.Decode
 import Data.BULK.Encode
 import Data.BULK.TextNotation (parseTextNotation)
 import Data.BULK.Types
+import Vary.Extra (veitherToMaybe)
 
 makePrisms ''BULK
 
@@ -28,15 +28,15 @@ _Int :: (Integral a) => Prism' BULK a
 _Int = prism' encodeInt toIntegral
 
 _Bytes :: Prism' Text ByteString
-_Bytes = prism' undefined $ eitherToMaybe . parseTextNotation
+_Bytes = prism' undefined $ veitherToMaybe . parseTextNotation
 
 -- | This 'Prism' provides a 'Traversal' for tweaking the yield of a BULK stream encoding a single expression
 _BulkExpr :: Prism' ByteString BULK
-_BulkExpr = prism' (encode . List.singleton) (eitherToMaybe . parseLazy getExpression)
+_BulkExpr = prism' (encode . List.singleton) (veitherToMaybe . parseLazy getExpression)
 
 -- | This 'Prism' provides a 'Traversal' for tweaking the yield of a BULK stream
 bulkStreamL :: VersionConstraint -> Prism' ByteString BULK
-bulkStreamL constraint = prism' (encode . forceList) (eitherToMaybe . parseLazy (getStream constraint))
+bulkStreamL constraint = prism' (encode . forceList) (veitherToMaybe . parseLazy (getStream constraint))
   where
     forceList (Form list) = list
     forceList bulk = [bulk]

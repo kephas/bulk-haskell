@@ -21,6 +21,8 @@ import Data.Either.Extra (eitherToMaybe)
 import Data.Word (
     Word8,
  )
+import Vary.VEither (VEither (..))
+import Vary.VEither qualified as V
 import Witch (from)
 import Prelude hiding (readFile)
 
@@ -33,10 +35,10 @@ data Syntax = FormEnd
 data VersionConstraint = ReadVersion | SetVersion Int Int
 
 -- | Read an entire file as a BULK stream
-readFile :: FilePath -> IO (Either String BULK)
+readFile :: FilePath -> IO (VEither '[String] BULK)
 readFile = readFileWithVersion ReadVersion
 
-readFileWithVersion :: VersionConstraint -> FilePath -> IO (Either String BULK)
+readFileWithVersion :: VersionConstraint -> FilePath -> IO (VEither '[String] BULK)
 readFileWithVersion version path = parseLazy (getStream version) <$> BL.readFile path
 
 -- | Get monad to read one BULK expression
@@ -133,9 +135,9 @@ split26 byte = (shiftR (byte .&. 0xC0) 6, fromIntegral $ byte .&. 0x3F)
 pattern Prefix2 :: (Integral a) => Word8 -> a -> Word8
 pattern Prefix2 prefix value <- (split26 -> (prefix, value))
 
-parseLazy :: Get a -> ByteString -> Either String a
+parseLazy :: Get a -> ByteString -> VEither '[String] a
 parseLazy get input =
     case pushEndOfInput $ runGetIncremental get `pushChunks` input of
-        Fail _unconsumed _offset err -> Left err
-        Done _unconsumed _offset result -> Right result
-        Partial _k -> Left "Impossible: parser wasn't failed or done after end of input!"
+        Fail _unconsumed _offset err -> V.fromLeft err
+        Done _unconsumed _offset result -> VRight result
+        Partial _k -> V.fromLeft "Impossible: parser wasn't failed or done after end of input!"

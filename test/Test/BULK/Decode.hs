@@ -1,4 +1,5 @@
 {-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeApplications #-}
@@ -10,7 +11,6 @@ import Control.Lens hiding (cons, from)
 import Data.Bits (Bits (..))
 import Data.ByteString.Lazy (ByteString, cons, pack, singleton)
 import Data.Digits qualified as D
-import Data.Either (isLeft)
 import Data.Foldable (traverse_)
 import Data.Functor (($>))
 import Data.Text (Text)
@@ -19,20 +19,23 @@ import System.Random (Random)
 import Test.Hspec
 import Test.QuickCheck (Gen, Property, arbitrary, choose, forAll, listOf, resize)
 import Test.QuickCheck.Instances.ByteString ()
+import Vary (Vary)
+import Vary.Extra (isVLeft)
+import Vary.VEither (VEither (..))
 import Witch (via)
 import Prelude hiding (words)
 
 import Data.BULK (BULK (Array, Form, Reference), VersionConstraint (SetVersion), encode, getExpression, getStream, parseLazy, parseTextNotation, toIntegral, _BulkExpr, _Int, _Nat)
 import Test.BULK.Encode (bulkNum)
 
-parseStreamWith :: VersionConstraint -> ByteString -> Either String BULK
+parseStreamWith :: VersionConstraint -> ByteString -> VEither '[String] BULK
 parseStreamWith version = parseLazy (getStream version)
 
 readFailsOn :: Word8 -> Expectation
-readFailsOn word = word `shouldSatisfy` (\w -> isLeft $ parseLazy getExpression $ cons w "\0\0")
+readFailsOn word = word `shouldSatisfy` (\w -> isVLeft $ parseLazy getExpression $ cons w "\0\0")
 
-shouldFail :: (Show a, Show b) => Either a b -> Expectation
-shouldFail result = result `shouldSatisfy` isLeft
+shouldFail :: (Show (Vary a), Show b, HasCallStack) => VEither a b -> Expectation
+shouldFail result = result `shouldSatisfy` isVLeft
 
 test_bigger_arrays_decoding :: Int -> Property
 test_bigger_arrays_decoding size =
@@ -44,7 +47,7 @@ parseInts = traverse_ \(kind, bytes, value) ->
     toIntegral (bulkNum kind bytes) `shouldBe` Just value
 
 shouldParseTo :: ByteString -> BULK -> Expectation
-words `shouldParseTo` expr = parseLazy getExpression words `shouldBe` Right expr
+words `shouldParseTo` expr = parseLazy getExpression words `shouldBe` VRight expr
 
 shouldParseToPrism :: (Integral a, Bits a, Show a) => Prism' BULK a -> ByteString -> a -> Expectation
 shouldParseToPrism prism_ words num = words ^? _BulkExpr . prism_ `shouldBe` Just num
@@ -56,7 +59,7 @@ shouldParseToInt :: ByteString -> Int -> Expectation
 shouldParseToInt = shouldParseToPrism _Int
 
 shouldDenote :: Text -> [BULK] -> Expectation
-text `shouldDenote` list = (parseTextNotation text >>= parseLazy (getStream $ SetVersion 1 0)) `shouldBe` Right (Form list)
+text `shouldDenote` list = (parseTextNotation text >>= parseLazy (getStream $ SetVersion 1 0)) `shouldBe` VRight (Form list)
 
 unDigits :: [Word8] -> Integer
 unDigits = D.unDigits 256 . map fromIntegral

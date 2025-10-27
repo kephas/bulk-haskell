@@ -10,6 +10,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TypeOperators #-}
 
 module Data.BULK.ToFrom where
 
@@ -29,20 +30,22 @@ import Data.BULK.Types (BULK (..), FullNamespaceDefinition (..), MatchBULK (..),
 import Data.List (find)
 import Data.Text (Text)
 import Data.Word (Word8)
+import Vary.Extra (fromEither1)
+import Vary.VEither (VEither)
 
 class FromBULK a where
     parseBULK :: BULK -> Parser a
 
-fromBULK :: (FromBULK a) => BULK -> Either String a
+fromBULK :: (FromBULK a) => BULK -> VEither '[String] a
 fromBULK = fromBULKWith []
 
-fromBULKWith :: (FromBULK a) => [FullNamespaceDefinition] -> BULK -> Either String a
+fromBULKWith :: (FromBULK a) => [FullNamespaceDefinition] -> BULK -> VEither '[String] a
 fromBULKWith nss = runParser . parseBULK . eval nss
 
-decode :: (FromBULK a) => [FullNamespaceDefinition] -> ByteString -> Either String a
+decode :: (FromBULK a) => [FullNamespaceDefinition] -> ByteString -> VEither '[String] a
 decode nss = parseLazy (getStream $ SetVersion 1 0) >=> fromBULKWith nss
 
-decodeNotation :: (FromBULK a) => [FullNamespaceDefinition] -> Text -> Either String a
+decodeNotation :: (FromBULK a) => [FullNamespaceDefinition] -> Text -> VEither '[String] a
 decodeNotation nss = parseTextNotation >=> decode nss
 
 withForm :: (FromBULK a) => MatchBULK -> Parser a -> BULK -> Parser a
@@ -99,8 +102,8 @@ instance (FromBULK a) => FromBULK [a] where
 
 type Parser a = Sem '[Fail, State (Maybe [BULK])] a
 
-runParser :: Parser a -> Either String a
-runParser = run . evalState Nothing . runFail
+runParser :: Parser a -> VEither '[String] a
+runParser = fromEither1 . run . evalState Nothing . runFail
 
 rawName :: Int -> Word8 -> MatchBULK
 rawName marker name = MatchBULK{..}

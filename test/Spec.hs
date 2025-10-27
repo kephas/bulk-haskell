@@ -15,6 +15,8 @@ import Data.Word (Word8)
 import Test.Hspec
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck (arbitrary, chooseInt, forAll, listOf, withMaxSuccess, (==>))
+import Vary.Extra (fromLeft1)
+import Vary.VEither (VEither (VRight))
 import Witch (from, via)
 import Prelude hiding (readFile)
 
@@ -67,18 +69,18 @@ spec = describe "BULK" $ do
                 it "reports bad syntax" $ do
                     readFile "test/bad nesting.bulk" `shouldReturn` badNesting
                 it "checks for version 1.0" $ do
-                    readFile "test/missing version.bulk" `shouldReturn` Left "missing version"
-                    readFileWithVersion (SetVersion 1 0) "test/missing version.bulk" `shouldReturn` Right (Form [Nil])
+                    readFile "test/missing version.bulk" `shouldReturn` fromLeft1 "missing version"
+                    readFileWithVersion (SetVersion 1 0) "test/missing version.bulk" `shouldReturn` VRight (Form [Nil])
             describe "version and profile" $ do
                 it "checks for version 1.0" $ do
-                    parseStreamWith ReadVersion "\x01\x10\x00\x81\x80\x02" `shouldBe` Right (Form [Form [IntReference 16 0, 1, 0]])
-                    parseStreamWith ReadVersion "\x01\x10\x00\x81\x82\x02" `shouldBe` Right (Form [Form [IntReference 16 0, 1, 2]])
-                    parseStreamWith ReadVersion "\x01\x10\x00\x82\x80\x02" `shouldBe` Left "this application only supports BULK version 1.x"
-                    parseStreamWith ReadVersion "\x01\x10\x00\x81\x00\x00\x02" `shouldBe` Left "malformed version"
-                    parseStreamWith ReadVersion "\0" `shouldBe` Left "missing version"
-                    parseStreamWith (SetVersion 1 0) "\0" `shouldBe` Right (Form [Nil])
-                    parseStreamWith (SetVersion 1 2) "\0" `shouldBe` Right (Form [Nil])
-                    parseStreamWith (SetVersion 2 0) "\0" `shouldBe` Left "this application only supports BULK version 1.x"
+                    parseStreamWith ReadVersion "\x01\x10\x00\x81\x80\x02" `shouldBe` VRight (Form [Form [IntReference 16 0, 1, 0]])
+                    parseStreamWith ReadVersion "\x01\x10\x00\x81\x82\x02" `shouldBe` VRight (Form [Form [IntReference 16 0, 1, 2]])
+                    parseStreamWith ReadVersion "\x01\x10\x00\x82\x80\x02" `shouldBe` fromLeft1 "this application only supports BULK version 1.x"
+                    parseStreamWith ReadVersion "\x01\x10\x00\x81\x00\x00\x02" `shouldBe` fromLeft1 "malformed version"
+                    parseStreamWith ReadVersion "\0" `shouldBe` fromLeft1 "missing version"
+                    parseStreamWith (SetVersion 1 0) "\0" `shouldBe` VRight (Form [Nil])
+                    parseStreamWith (SetVersion 1 2) "\0" `shouldBe` VRight (Form [Nil])
+                    parseStreamWith (SetVersion 2 0) "\0" `shouldBe` fromLeft1 "this application only supports BULK version 1.x"
         --
         -- Encoding
         describe "encoding" $ do
@@ -115,10 +117,10 @@ spec = describe "BULK" $ do
                 "( version 1 0 ) true false ( define 0x1400 ( subst ( concat ( arg 1 ) ( arg 2 ) ) ) )" `shouldDenote` [version 1 0, Core 1, Core 2, Form [Core 6, IntReference 0x14 0, Form [Core 0x0B, Form [Core 0x0A, Form [Core 0x0C, Array "\1"], Form [Core 0x0C, Array "\2"]]]]]
                 "( bulk:ns 0x1400 #[4] 0x0011-2233 ) ( bulk:ns-mnemonic 0x1400 )" `shouldDenote` [Form [Core 3, IntReference 0x14 0, Array "\x00\x11\x22\x33"], Form [Core 8, IntReference 0x14 0]]
             it "parses UTF-8 strings" $ do
-                parseTextNotation [i|"foo"|] `shouldBe` Right "\xC3\&foo"
-                parseTextNotation [i|"foo" "quuux"|] `shouldBe` Right "\xC3\&foo\xC5quuux"
-                parseTextNotation [i|"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor"|] `shouldBe` Right "\x03\xC1\78Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor"
-                parseTextNotation [i|"関数型プログラミング"|] `shouldBe` Right "\xDE\233\150\162\230\149\176\229\158\139\227\131\151\227\131\173\227\130\176\227\131\169\227\131\159\227\131\179\227\130\176"
+                parseTextNotation [i|"foo"|] `shouldBe` VRight "\xC3\&foo"
+                parseTextNotation [i|"foo" "quuux"|] `shouldBe` VRight "\xC3\&foo\xC5quuux"
+                parseTextNotation [i|"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor"|] `shouldBe` VRight "\x03\xC1\78Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor"
+                parseTextNotation [i|"関数型プログラミング"|] `shouldBe` VRight "\xDE\233\150\162\230\149\176\229\158\139\227\131\151\227\131\173\227\130\176\227\131\169\227\131\159\227\131\179\227\130\176"
             it "parses example files" $ do
                 parseTextFile "test/nesting.bulktext" `shouldReturn` nesting
                 parseTextFile "test/primitives.bulktext" `shouldReturn` primitives
@@ -155,16 +157,16 @@ spec = describe "BULK" $ do
         -- Parser monad
         describe "Parser monad" $ do
             it "parses Haskell values" $ do
-                decodeNotation [] "( version 1 0 ) ( 0x14-01 0x10-02 0x10-01 42 )" `shouldBe` Right (Foo False True 42)
-                decodeNotation [foo] "( version 1 0 ) ( 0x10-03 w6[20] #[6] 0x0A0B0C0D0E0F ) ( 0x14-00 0x10-02 0x10-01 42 )" `shouldBe` Right (FooBar False True 42)
+                decodeNotation [] "( version 1 0 ) ( 0x14-01 0x10-02 0x10-01 42 )" `shouldBe` VRight (Foo False True 42)
+                decodeNotation [foo] "( version 1 0 ) ( 0x10-03 w6[20] #[6] 0x0A0B0C0D0E0F ) ( 0x14-00 0x10-02 0x10-01 42 )" `shouldBe` VRight (FooBar False True 42)
 
     describe "slow tests" $ do
         prop "reads really big generic arrays" $ withMaxSuccess 20 $ test_bigger_arrays_decoding 3
 
-nesting, primitives, badNesting :: Either String BULK
-nesting = Right $ Form [version 1 0, Form [], Form [Nil, Form [Nil], Form []]]
+nesting, primitives, badNesting :: VEither '[String] BULK
+nesting = VRight $ Form [version 1 0, Form [], Form [Nil, Form [Nil], Form []]]
 primitives =
-    Right $
+    VRight $
         Form
             [ version 1 0
             , Form
@@ -182,7 +184,7 @@ primitives =
                 , IntReference (0x7F + 0xFF + 0xBC) 0x1A
                 ]
             ]
-badNesting = Left "not enough data (while reading a form)"
+badNesting = fromLeft1 "not enough data (while reading a form)"
 
 parseOnlyIntCases, bidirectionalIntCases :: [(Word8, ByteString, Int)]
 parseOnlyIntCases =
