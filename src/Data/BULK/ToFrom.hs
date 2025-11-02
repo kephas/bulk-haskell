@@ -13,22 +13,26 @@
 
 module Data.BULK.ToFrom where
 
+import Control.Monad ((>=>))
 import Data.ByteString.Lazy (ByteString)
+import Data.ByteString.Lazy qualified as B
+import Data.List (find)
 import Data.String.Interpolate (i)
+import Data.Text (Text)
+import Data.Text.Encoding.Error (OnDecodeError, lenientDecode)
+import Data.Text.Lazy qualified as LT
+import Data.Text.Lazy.Encoding qualified as LTE
+import Data.Word (Word8)
 import Polysemy (Sem, run)
 import Polysemy.Fail (Fail, runFail)
 import Polysemy.State (State, evalState, get, put)
 
-import Control.Monad ((>=>))
 import Data.BULK.Core (pattern Core)
 import Data.BULK.Decode (VersionConstraint (SetVersion), getStream, parseLazy)
 import Data.BULK.Encode (pattern IntReference, pattern Nat)
 import Data.BULK.Eval (eval)
 import Data.BULK.TextNotation (parseTextNotation)
 import Data.BULK.Types (BULK (..), FullNamespaceDefinition (..), MatchBULK (..), NameDefinition (..), Namespace (AssociatedNamespace))
-import Data.List (find)
-import Data.Text (Text)
-import Data.Word (Word8)
 
 class FromBULK a where
     parseBULK :: BULK -> Parser a
@@ -44,6 +48,17 @@ decode nss = parseLazy (getStream $ SetVersion 1 0) >=> fromBULKWith nss
 
 decodeNotation :: (FromBULK a) => [FullNamespaceDefinition] -> Text -> Either String a
 decodeNotation nss = parseTextNotation >=> decode nss
+
+decodeFile :: (FromBULK a) => [FullNamespaceDefinition] -> FilePath -> IO (Either String a)
+decodeFile nss path = decode nss <$> B.readFile path
+
+decodeNotationFile :: (FromBULK a) => [FullNamespaceDefinition] -> FilePath -> IO (Either String a)
+decodeNotationFile nss = decodeNotationFileWith nss lenientDecode
+
+decodeNotationFileWith :: (FromBULK a) => [FullNamespaceDefinition] -> OnDecodeError -> FilePath -> IO (Either String a)
+decodeNotationFileWith nss onError file = do
+    bytes <- B.readFile file
+    pure $ decodeNotation nss $ LT.toStrict $ LTE.decodeUtf8With onError bytes
 
 withForm :: (FromBULK a) => MatchBULK -> Parser a -> BULK -> Parser a
 withForm match parser (Form (op : content))
