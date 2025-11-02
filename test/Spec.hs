@@ -155,8 +155,7 @@ spec = describe "BULK" $ do
         -- Parser monad
         describe "Parser monad" $ do
             it "parses Haskell values" $ do
-                decodeNotation [] "( version 1 0 ) ( 0x14-01 0x10-02 0x10-01 42 )" `shouldBe` Right (Foo False True 42)
-                decodeNotation [foo] "( version 1 0 ) ( 0x10-03 w6[20] #[6] 0x0A0B0C0D0E0F ) ( 0x14-00 0x10-02 0x10-01 42 )" `shouldBe` Right (FooBar False True 42)
+                decodeNotation [foo] "( version 1 0 ) ( 0x10-03 w6[20] #[6] 0x0A0B0C0D0E0F ) ( 0x14-00 0x10-02 0x10-01 42 )" `shouldBe` Right (Foo False True 42)
 
     describe "slow tests" $ do
         prop "reads really big generic arrays" $ withMaxSuccess 20 $ test_bigger_arrays_decoding 3
@@ -220,13 +219,6 @@ userForm (Form (Core _ : _)) = False
 userForm (Form children) = all userForm children
 userForm _ = True
 
-data Foo = Foo Bool Bool Int deriving (Eq, Show)
-
-instance FromBULK Foo where
-    parseBULK = withStream do
-        nextBULK >>= withForm (rawName 0x14 0x01) do
-            Foo <$> nextBULK <*> nextBULK <*> nextBULK
-
 foo :: FullNamespaceDefinition
 foo =
     defineNamespace $
@@ -238,9 +230,9 @@ foo =
                 ]
             }
 
-data FooBar = FooBar Bool Bool Int deriving (Eq, Show)
+data Foo = Foo Bool Bool Int deriving (Eq, Show)
 
-instance FromBULK FooBar where
+instance FromBULK Foo where
     parseBULK = withStream do
         nextBULK >>= withForm (nsName foo "bar") do
-            FooBar <$> nextBULK <*> nextBULK <*> nextBULK
+            Foo <$> nextBULK <*> nextBULK <*> nextBULK
