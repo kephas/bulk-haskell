@@ -156,6 +156,8 @@ spec = describe "BULK" $ do
         describe "Parser monad" $ do
             it "parses Haskell values" $ do
                 decodeNotation [foo] "( version 1 0 ) ( 0x10-03 w6[20] #[6] 0x0A0B0C0D0E0F ) ( 0x14-00 0x10-02 0x10-01 42 )" `shouldBe` Right (Foo False True 42)
+                decodeNotation @Foo [foo] "( version 1 0 ) ( 0x10-03 w6[20] #[6] 0x0A0B0C0D0E0F ) ( 0x14-00 0x10-02 0x10-01 nil )" `shouldBe` Left "not an integer: Nil"
+                decodeNotation @Foo [foo] "( version 1 0 ) ( 0x10-03 w6[20] #[6] 0x0A0B0C0D0E0F ) ( 0x14-00 0x10-02 0x10-01 )" `shouldBe` Left "no next BULK expression"
 
     describe "slow tests" $ do
         prop "reads really big generic arrays" $ withMaxSuccess 20 $ test_bigger_arrays_decoding 3
