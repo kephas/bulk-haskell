@@ -161,6 +161,7 @@ spec = describe "BULK" $ do
                 decodeFile [foo] "test/foo.bulk" `shouldReturn` Right [Foo False True 42]
                 decodeFile [foo] "test/foos.bulk" `shouldReturn` Right [Foo True True 1, Foo True False 1, Foo False True 2, Foo False False 3, Foo True True 5, Foo False False 8]
                 decodeNotationFile [foo] "test/foos.bulktext" `shouldReturn` Right [Foo True True 1, Foo True False 1, Foo False True 2, Foo False False 3, Foo True True 5, Foo False False 8]
+                decodeNotation [foo, bar] "( version 1 0 ) ( ns w6[20] #[5] 0xDEADFEED01 ) ( ns w6[21] #[5] 0xDEADFEED02 ) ( 0x15-00 1 ( 0x14-00 false true 42 ) )" `shouldBe` Right [Bar 1 (Foo False True 42)]
 
     describe "slow tests" $ do
         prop "reads really big generic arrays" $ withMaxSuccess 20 $ test_bigger_arrays_decoding 3
@@ -235,8 +236,25 @@ foo =
                 ]
             }
 
+bar :: FullNamespaceDefinition
+bar =
+    defineNamespace $
+        NamespaceDefinition
+            { matchID = (== Array "\xDE\xAD\xFE\xED\x02")
+            , mnemonic = "bar"
+            , names =
+                [ SelfEval{marker = 0x00, mnemonic = "bar"}
+                ]
+            }
+
 data Foo = Foo Bool Bool Int deriving (Eq, Show)
 
 instance FromBULK Foo where
     parseBULK = withForm (nsName foo "foo") do
         Foo <$> nextBULK <*> nextBULK <*> nextBULK
+
+data Bar = Bar Int Foo deriving (Eq, Show)
+
+instance FromBULK Bar where
+    parseBULK = withForm (nsName bar "bar") do
+        Bar <$> nextBULK <*> nextBULK
