@@ -41,6 +41,8 @@ eval :: [FullNamespaceDefinition] -> BULK -> BULK
 eval nss bulk = fromMaybe bulk $ run $ evalState (emptyScope nss) $ evalExpr bulk
 
 evalExpr :: (Member (State Scope) r) => BULK -> Sem r (Maybe BULK)
+evalExpr (Form [Core 0x00, Nat @Int _, Nat @Int _]) =
+    pure Nothing
 evalExpr (Form [Core 0x03, Nat marker, expr]) =
     associateNS marker expr
 evalExpr (Form (Core 0x04 : identifier@(Array _) : nss)) = do
@@ -50,8 +52,6 @@ evalExpr (Form [Core 0x05, Nat base, Nat count, expr]) = do
     noYield $ traverse (uncurry associateNS) $ zip (take count [base ..]) foundNSS
 evalExpr (Form [Core 0x06, ref, expr]) =
     Nothing <$ modify (over definitions (M.insert ref expr))
-evalExpr (Form [Core 0x00, Nat @Int _, Nat @Int _]) =
-    pure Nothing
 evalExpr (Form content) = do
     scope <- get
     let evaledContent = catMaybes $ run $ evalState scope $ traverse @[] evalExpr content

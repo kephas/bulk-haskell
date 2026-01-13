@@ -37,10 +37,11 @@ import Text.Megaparsec.Char.Lexer qualified as L
 import Data.BULK.Decode (VersionConstraint (ReadVersion), getStream, parseLazy)
 import Data.BULK.Encode (encodeExpr, encodeNat)
 import Data.BULK.Types (BULK (..), Namespace (..))
+import Witch (from)
 
 data NotationNS = NotationNS {namespace :: Namespace, usedNames :: Map Text Word8, availableNames :: [Word8]}
 
-data NamespaceMap = NamespaceMap {usedNamespaces :: Map Text NotationNS, nextNamespace :: Namespace}
+data NamespaceMap = NamespaceMap {usedNamespaces :: Map Text NotationNS, nextMarker :: Int}
 
 type Parser = ParsecT String Text (State NamespaceMap)
 
@@ -62,7 +63,7 @@ bulkCoreNames :: (Integral a) => [(Text, a)]
 bulkCoreNames = zip (T.words "version true false ns package import define mnemonic/def ns-mnemonic verifiable-ns concat subst arg rest stringenc iana-charset codepage string string* blob nested-bulk unsigned-int signed-int fraction binary-float decimal-float binary-fixed decimal-fixed decimal2 prefix prefix* postfix postfix* arity") ([0x0 .. 0xD] ++ [0x10 .. 0x16] ++ [0x20 .. 0x27] ++ [0x30 .. 0x34])
 
 bulkProfile :: NamespaceMap
-bulkProfile = NamespaceMap{usedNamespaces = M.singleton "bulk" NotationNS{namespace = CoreNamespace, usedNames = coreNames, availableNames = []}, nextNamespace = UnassociatedNamespace 0x14}
+bulkProfile = NamespaceMap{usedNamespaces = M.singleton "bulk" NotationNS{namespace = CoreNamespace, usedNames = coreNames, availableNames = []}, nextMarker = 0x14}
   where
     coreNames = M.fromList bulkCoreNames
 
@@ -166,9 +167,9 @@ ensureRef nsMnemonic nameMnemonic = do
     lookupNS nss = M.lookup nsMnemonic nss.usedNamespaces
     createNamespace = do
         nss <- get
-        let namespace = nss.nextNamespace
-            newNamespace = NotationNS{namespace = namespace, usedNames = M.empty, availableNames = [0 .. 255]}
-        put nss{usedNamespaces = M.insert nsMnemonic newNamespace nss.usedNamespaces, nextNamespace = succ namespace}
+        let marker = nss.nextMarker
+            newNamespace = NotationNS{namespace = from marker, usedNames = M.empty, availableNames = [0 .. 255]}
+        put nss{usedNamespaces = M.insert nsMnemonic newNamespace nss.usedNamespaces, nextMarker = succ marker}
         pure newNamespace
     createName :: NotationNS -> Parser Word8
     createName ns = case ns.availableNames of

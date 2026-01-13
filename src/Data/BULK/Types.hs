@@ -1,5 +1,7 @@
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedRecordDot #-}
@@ -11,7 +13,7 @@ import Data.ByteString.Lazy (ByteString)
 import Data.Text (Text)
 import Data.Unique (Unique)
 import Data.Word (Word8)
-import Witch (From (..))
+import Witch (From (..), TryFrom (..), maybeTryFrom)
 
 data BULK
     = Nil
@@ -77,11 +79,8 @@ instance From Int Namespace where
     from 0x10 = CoreNamespace
     from ns = UnassociatedNamespace ns
 
-instance From Namespace Int where
-    from CoreNamespace = 0x10
-    from (UnassociatedNamespace ns) = ns
-    from (AssociatedNamespace ns _) = ns
-
-instance Enum Namespace where
-    toEnum = from
-    fromEnum = from
+instance TryFrom Namespace Int where
+    tryFrom = maybeTryFrom \case
+        CoreNamespace -> Just 0x10
+        UnassociatedNamespace ns -> Just ns
+        AssociatedNamespace _ _ -> Nothing
