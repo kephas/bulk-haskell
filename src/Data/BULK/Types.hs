@@ -42,6 +42,11 @@ data FullNamespaceDefinition
 
 data NameDefinition = SelfEval {marker :: Word8, mnemonic :: Text}
 
+data Package = Package
+    { matchID :: BULK -> Bool
+    , nsIDs :: [BULK]
+    }
+
 data MatchBULK = MatchBULK {match :: BULK -> Bool, expected :: Text}
 
 instance Eq Namespace where
