@@ -21,6 +21,7 @@ import Prelude hiding (readFile)
 import Data.BULK
 import Data.BULK.Core (pattern Core)
 import Data.BULK.Encode (pattern IntReference)
+import Data.Text (Text)
 import Test.BULK.Decode
 import Test.QuickCheck.Instances.BULK ()
 
@@ -164,6 +165,17 @@ spec = describe "BULK" $ do
                 decodeNotation [foo, bar] "( version 1 0 ) ( ns w6[20] #[5] 0xDEADFEED01 ) ( ns w6[21] #[5] 0xDEADFEED02 ) ( 0x15-00 1 ( 0x14-00 false true 42 ) )" `shouldBe` Right [Bar 1 (Foo False True 42)]
                 decodeNotation [foo, bar] "( version 1 0 ) ( package #[5] 0xDEADFEED03 #[5] 0xDEADFEED01 #[5] 0xDEADFEED02 ) ( import 20 2 #[5] 0xDEADFEED03 ) ( 0x15-00 1 ( 0x14-00 false true 42 ) )" `shouldBe` Right [Bar 1 (Foo False True 42)]
 
+        --
+        -- Custom encoders
+        describe "Custom encoders" $ do
+            it "encodes simple primitive types" $ do
+                matchTo [(True, Core 0x01), (False, Core 0x02)]
+                matchTo @Int [(1, Array "\1"), (64, Array "\64"), (256, Array "\x01\x00"), (-1, Form [Core 0x21, Array "\xFF"])]
+                matchTo [([True, False], Form [Core 0x01, Core 0x02])]
+                matchTo @ByteString [("", Array ""), ("\0\1\2", Array "\0\1\2")]
+            it "encodes UTF-8 strings" $ do
+                matchTo @Text [("foo", Array "foo"), ("γράφω", Array "\xCE\xB3\xCF\x81\xCE\xAC\xCF\x86\xCF\x89")]
+
     describe "slow tests" $ do
         prop "reads really big generic arrays" $ withMaxSuccess 20 $ test_bigger_arrays_decoding 3
 
@@ -259,3 +271,6 @@ data Bar = Bar Int Foo deriving (Eq, Show)
 instance FromBULK Bar where
     parseBULK = withForm (nsName bar "bar") do
         Bar <$> nextBULK <*> nextBULK
+
+matchTo :: (ToBULK a) => [(a, BULK)] -> IO ()
+matchTo = traverse_ (uncurry $ shouldBe . toBULK)

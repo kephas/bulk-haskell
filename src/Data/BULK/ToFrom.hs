@@ -27,15 +27,19 @@ import Polysemy (Sem, run)
 import Polysemy.Fail (Fail, runFail)
 import Polysemy.State (State, evalState, get, put)
 
-import Data.BULK.Core (pattern Core)
+import Data.BULK.Core (encodeInt, pattern Core)
 import Data.BULK.Decode (VersionConstraint (SetVersion), getStream, parseLazy)
-import Data.BULK.Encode (pattern IntReference, pattern Nat)
+import Data.BULK.Encode (encodeNat, pattern IntReference, pattern Nat)
 import Data.BULK.Eval (eval)
 import Data.BULK.TextNotation (parseTextNotation)
 import Data.BULK.Types (BULK (..), FullNamespaceDefinition (..), MatchBULK (..), NameDefinition (..), Namespace (AssociatedNamespace))
+import Data.Text.Encoding (encodeUtf8)
 
 class FromBULK a where
     parseBULK :: BULK -> Parser a
+
+class ToBULK a where
+    toBULK :: a -> BULK
 
 fromBULK :: (FromBULK a) => BULK -> Either String a
 fromBULK = fromBULKWith []
@@ -135,3 +139,21 @@ nsName ns1@(FullNamespaceDefinition{..}) mnemonic1 = MatchBULK{..}
     matchDef :: FullNamespaceDefinition -> Word8 -> NameDefinition -> Bool
     matchDef ns2 name def = ns1 == ns2 && name == def.marker
     expected = [i|#{mnemonic}:#{mnemonic1}|]
+
+instance ToBULK Bool where
+    toBULK True = Core 1
+    toBULK False = Core 2
+
+instance ToBULK Int where
+    toBULK num
+        | num >= 0 = encodeNat num
+        | otherwise = encodeInt num
+
+instance (ToBULK a) => ToBULK [a] where
+    toBULK = Form . map toBULK
+
+instance ToBULK Text where
+    toBULK = Array . B.fromStrict . encodeUtf8
+
+instance ToBULK ByteString where
+    toBULK = Array
