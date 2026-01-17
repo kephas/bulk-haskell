@@ -48,6 +48,7 @@ library:
     - extra
     - megaparsec
     - mtl
+    - parser-combinators
 
 executables:
   bulk-cli:

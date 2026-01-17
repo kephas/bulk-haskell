@@ -9,6 +9,7 @@
 
 module Data.BULK.TextNotation where
 
+import Control.Applicative.Combinators (between)
 import Control.Monad.State (MonadState (..), State, evalState, gets, modify, runState)
 import Data.Bifunctor (first)
 import Data.Bits ((.|.))
@@ -30,14 +31,14 @@ import Data.Text.Encoding.Error (OnDecodeError, lenientDecode)
 import Data.Text.Lazy qualified as LT
 import Data.Text.Lazy.Encoding qualified as LTE
 import Data.Word (Word8)
-import Text.Megaparsec (ErrorFancy (ErrorFail), MonadParsec (..), ParseError (FancyError), ParseErrorBundle (..), ParsecT, ShowErrorComponent (..), TraversableStream, VisualStream, anySingleBut, choice, chunk, errorBundlePretty, many, match, optional, runParserT, satisfy, single, some, takeRest, (<|>))
+import Text.Megaparsec (ErrorFancy (ErrorFail), MonadParsec (..), ParseError (FancyError), ParseErrorBundle (..), ParsecT, ShowErrorComponent (..), TraversableStream, VisualStream, anySingleBut, choice, chunk, errorBundlePretty, many, optional, runParserT, single, some, takeRest, (<|>))
 import Text.Megaparsec.Char (space)
 import Text.Megaparsec.Char.Lexer qualified as L
+import Witch (from)
 
 import Data.BULK.Decode (VersionConstraint (ReadVersion), getStream, parseLazy)
 import Data.BULK.Encode (encodeExpr, encodeNat)
 import Data.BULK.Types (BULK (..), Namespace (..))
-import Witch (from)
 
 data NotationNS = NotationNS {namespace :: Namespace, usedNames :: Map Text Word8, availableNames :: [Word8]}
 
@@ -68,16 +69,10 @@ bulkProfile = NamespaceMap{usedNamespaces = M.singleton "bulk" NotationNS{namesp
     coreNames = M.fromList bulkCoreNames
 
 lexerP :: Parser [Text]
-lexerP =
-    try atLeastOne <|> pure []
-  where
-    atLeastOne :: Parser [Text]
-    atLeastOne = do
-        lexeme <- (quotedStringP <|> tokenSyntaxP) <* space
-        (lexeme :) <$> lexerP
+lexerP = many $ (quotedStringP <|> tokenSyntaxP) <* space
 
 tokenSyntaxP :: Parser Text
-tokenSyntaxP = fmap fst $ match $ some $ satisfy $ not . isSpace
+tokenSyntaxP = takeWhile1P (Just "token") $ not . isSpace
 
 parseTextToken :: Text -> State NamespaceMap (Either String BB.Builder)
 parseTextToken "nil" = pure $ w8 0
@@ -121,21 +116,14 @@ decimalP :: Parser BB.Builder
 decimalP = do
     encodeExpr . encodeNat <$> (L.decimal :: Parser Int)
 
-stringSyntaxP :: Parser Text
-stringSyntaxP = do
-    void $ single '"'
-    (text, _) <- match $ many (anySingleBut '"')
-    void $ single '"'
-    pure text
-
-quotedStringP :: Parser Text
-quotedStringP = do
-    content <- stringSyntaxP
-    pure $ '"' `T.cons` content `T.snoc` '"'
+quoteP, notQuoteP, quotedStringP :: Parser Text
+quoteP = T.singleton <$> single '"'
+notQuoteP = takeWhileP (Just "not quotes") ('"' /=)
+quotedStringP = quoteP <> notQuoteP <> quoteP
 
 stringP :: Parser BB.Builder
 stringP =
-    encodeExpr . Array . LTE.encodeUtf8 . LT.fromStrict <$> stringSyntaxP
+    encodeExpr . Array . LTE.encodeUtf8 . LT.fromStrict <$> between quoteP quoteP notQuoteP
 
 referenceP :: Parser BB.Builder
 referenceP = qualified <|> unqualified

@@ -54,6 +54,7 @@ library
     , lens
     , megaparsec
     , mtl
+    , parser-combinators
     , polysemy
     , polysemy-plugin
     , string-interpolate
