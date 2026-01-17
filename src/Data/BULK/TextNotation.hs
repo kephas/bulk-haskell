@@ -60,7 +60,7 @@ parseTextFileWith onerror constraint file = do
     pure $ parseTextNotation (LT.toStrict $ LTE.decodeUtf8With onerror bytes) >>= parseLazy (getStream constraint)
 
 bulkCoreNames :: (Integral a) => [(Text, a)]
-bulkCoreNames = zip (T.words "version true false ns package import define mnemonic/def ns-mnemonic verifiable-ns concat subst arg rest stringenc iana-charset codepage string string* blob nested-bulk unsigned-int signed-int fraction binary-float decimal-float binary-fixed decimal-fixed decimal2 prefix prefix* postfix postfix* arity") ([0x0 .. 0xD] ++ [0x10 .. 0x16] ++ [0x20 .. 0x27] ++ [0x30 .. 0x34])
+bulkCoreNames = zip (T.words "version true false ns package import define mnemonic/def ns-mnemonic verifiable-ns concat subst arg rest stringenc iana-charset codepage string string* blob nested-bulk indexable indexed-bulk indexed-array unsigned-int signed-int fraction binary-float decimal-float binary-fixed decimal-fixed decimal2 prefix prefix* postfix postfix* arity") ([0x0 .. 0xD] ++ [0x10 .. 0x19] ++ [0x20 .. 0x27] ++ [0x30 .. 0x34])
 
 bulkProfile :: NamespaceMap
 bulkProfile = NamespaceMap{usedNamespaces = M.singleton "bulk" NotationNS{namespace = CoreNamespace, usedNames = coreNames, availableNames = []}, nextMarker = 0x14}
