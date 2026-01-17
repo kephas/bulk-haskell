@@ -78,6 +78,7 @@ parseTextToken :: Text -> State NamespaceMap (Either String BB.Builder)
 parseTextToken "nil" = pure $ w8 0
 parseTextToken "(" = pure $ w8 1
 parseTextToken ")" = pure $ w8 2
+parseTextToken "#" = pure $ w8 3
 parseTextToken token_ = runParserM showFail tokenP token_
 
 w8 :: (Applicative f) => Word8 -> f BB.Builder

@@ -109,6 +109,8 @@ spec = describe "BULK" $ do
             it "parses small decimals" $ do
                 for_ smallWords $ \word ->
                     [i|#{word}|] `shouldDenote` [Array $ singleton word]
+            it "parses arrays" $ do
+                "# 64 0x0000000000000000-0000000000000000-0000000000000000-0000000000000000-0000000000000000-0000000000000000-0000000000000000-0000000000000000" `shouldDenote` [Array $ pack $ replicate 64 0]
             prop "parses bigger decimals" $ forAll (chooseInt (64, maxBound)) $ \num ->
                 [i|#{num}|] `shouldDenote` [encodeNat num]
             it "parses bulk core references" $ do
