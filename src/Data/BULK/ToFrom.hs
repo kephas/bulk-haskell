@@ -28,7 +28,7 @@ import Polysemy.Fail (Fail, runFail)
 import Polysemy.State (State, evalState, get, put)
 
 import Data.BULK.Core (encodeInt, pattern Core)
-import Data.BULK.Decode (VersionConstraint (SetVersion), getStream, parseLazy)
+import Data.BULK.Decode (VersionConstraint (ReadVersion), getStream, parseLazy)
 import Data.BULK.Encode (encodeNat, pattern IntReference, pattern Nat)
 import Data.BULK.Eval (eval)
 import Data.BULK.TextNotation (parseTextNotation)
@@ -48,7 +48,7 @@ fromBULKWith :: (FromBULK a) => [FullNamespaceDefinition] -> BULK -> Either Stri
 fromBULKWith nss = runParser . parseBULK . eval nss
 
 decode :: (FromBULK a) => [FullNamespaceDefinition] -> ByteString -> Either String a
-decode nss = parseLazy (getStream $ SetVersion 1 0) >=> fromBULKWith nss
+decode nss = parseLazy (getStream ReadVersion) >=> fromBULKWith nss
 
 decodeNotation :: (FromBULK a) => [FullNamespaceDefinition] -> Text -> Either String a
 decodeNotation nss = parseTextNotation >=> decode nss

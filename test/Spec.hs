@@ -159,6 +159,7 @@ spec = describe "BULK" $ do
         describe "Parser monad" $ do
             it "parses Haskell values" $ do
                 decodeNotation [foo] "( version 1 0 ) ( ns w6[20] #[5] 0xDEADFEED01 ) ( 0x14-00 false true 42 )" `shouldBe` Right [Foo False True 42]
+                decodeNotation @[Foo] [foo] "( ns w6[20] #[5] 0xDEADFEED01 ) ( 0x14-00 false true 42 )" `shouldBe` Left "missing version"
                 decodeNotation @[Foo] [foo] "( version 1 0 ) ( ns w6[20] #[5] 0xDEADFEED01 ) ( 0x14-00 false true nil )" `shouldBe` Left "not an integer: Nil"
                 decodeNotation @[Foo] [foo] "( version 1 0 ) ( ns w6[20] #[5] 0xDEADFEED01 ) ( 0x14-00 false true )" `shouldBe` Left "no next BULK expression"
                 decodeFile [foo] "test/foo.bulk" `shouldReturn` Right [Foo False True 42]
