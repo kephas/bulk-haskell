@@ -21,6 +21,7 @@ import Prelude hiding (readFile)
 import Data.BULK
 import Data.BULK.Core (pattern Core)
 import Data.BULK.Encode (pattern IntReference)
+import Data.BULK.Hash
 import Data.Text (Text)
 import Test.BULK.Decode
 import Test.QuickCheck.Instances.BULK ()
@@ -135,13 +136,13 @@ spec = describe "BULK" $ do
             it "has basic references" $ do
                 version 1 0 `shouldBe` Form [IntReference 16 0, Array "\1", Array "\0"]
             prop "has self-evaluating expressions" $ \expr ->
-                userForm expr ==> eval [] (Form [expr]) `shouldBe` Form [expr]
+                userForm expr ==> eval [] (Form [expr]) `shouldBe` Right (Form [expr])
             prop "has definitions" $ do
                 rvs <- nubBy ((==) `on` fst) <$> listOf ((,) <$> anySimpleRef <*> arbitrary)
                 let refs = map fst rvs
                     values = map snd rvs
                     definitions = zipWith define refs values
-                pure $ eval [] (Form $ definitions ++ refs) `shouldBe` Form values
+                pure $ eval [] (Form $ definitions ++ refs) `shouldBe` Right (Form values)
             it "respect scoping rule" do
                 shouldFail $ decodeNotation @[[Int]] [] "( ( bulk:define 0x1400 42 ) 0x1400 ) ( 0x1400 )"
             describe "parses numbers" $ do
@@ -155,6 +156,10 @@ spec = describe "BULK" $ do
                     encodeInt @Int (-1) `shouldBe` Form [Core 0x21, Array "\xFF"]
                     for_ bidirectionalIntCases \(kind, bytes, value) ->
                         encodeInt value `shouldBe` Form [Core kind, Array bytes]
+            it "has verifiable namespaces" $ do
+                decodeNotationFile @[()] [hash0] "test/123-bad.bulktext" `shouldReturn` Left "verification failed for namespace: 123 (expected digest 00000000000000000000000000000000 but got dd3bff1608fa25cc16ba90c0f8b4976e4a50b1d215cf8448e890e7cc4a4b0ff0)"
+                decodeNotationFile @[Int] [hash0] "test/123.bulktext" `shouldReturn` Right [1, 2, 3]
+
         --
         -- Parser monad
         describe "Parser monad" $ do
@@ -261,6 +266,17 @@ bar =
             , mnemonic = "bar"
             , names =
                 [ SelfEval{marker = 0x00, mnemonic = "bar"}
+                ]
+            }
+
+hash0 :: FullNamespaceDefinition
+hash0 =
+    defineNamespace $
+        NamespaceDefinition
+            { matchID = (== Array "\xDE\xAD\xFE\xED\x04")
+            , mnemonic = "hash0"
+            , names =
+                [ shake128Name 0x00 "shake128"
                 ]
             }
 

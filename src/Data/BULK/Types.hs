@@ -42,7 +42,16 @@ data FullNamespaceDefinition
     , names :: [NameDefinition]
     }
 
-data NameDefinition = SelfEval {marker :: Word8, mnemonic :: Text}
+data NameDefinition
+    = SelfEval
+        { marker :: Word8
+        , mnemonic :: Text
+        }
+    | DigestName
+        { marker :: Word8
+        , mnemonic :: Text
+        , checkDigest :: ByteString -> ByteString -> Either String ()
+        }
 
 data Package = Package
     { matchID :: BULK -> Bool

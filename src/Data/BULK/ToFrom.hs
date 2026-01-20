@@ -13,7 +13,7 @@
 
 module Data.BULK.ToFrom where
 
-import Control.Monad ((>=>))
+import Control.Monad ((<=<), (>=>))
 import Data.ByteString.Lazy (ByteString)
 import Data.ByteString.Lazy qualified as B
 import Data.List (find)
@@ -45,7 +45,7 @@ fromBULK :: (FromBULK a) => BULK -> Either String a
 fromBULK = fromBULKWith []
 
 fromBULKWith :: (FromBULK a) => [FullNamespaceDefinition] -> BULK -> Either String a
-fromBULKWith nss = runParser . parseBULK . eval nss
+fromBULKWith nss = runParser . parseBULK <=< eval nss
 
 decode :: (FromBULK a) => [FullNamespaceDefinition] -> ByteString -> Either String a
 decode nss = parseLazy (getStream ReadVersion) >=> fromBULKWith nss
@@ -100,6 +100,10 @@ list = do
 
 notExpected :: (MonadFail m) => String -> BULK -> m a
 notExpected expected value = fail [i|not a #{expected}: (#{value})|]
+
+instance FromBULK () where
+    parseBULK Nil = pure ()
+    parseBULK bulk = fail [i|not a nil: #{bulk}|]
 
 instance FromBULK Bool where
     parseBULK (Core 1) = pure True

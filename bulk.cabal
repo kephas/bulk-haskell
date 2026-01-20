@@ -30,6 +30,7 @@ library
       Data.BULK.Decode
       Data.BULK.Encode
       Data.BULK.Eval
+      Data.BULK.Hash
       Data.BULK.Lens
       Data.BULK.TextNotation
       Data.BULK.ToFrom
@@ -48,11 +49,13 @@ library
     , bits
     , bytestring
     , containers
+    , crypton
     , digits
     , extra
     , largeword
     , lens
     , megaparsec
+    , memory
     , mtl
     , parser-combinators
     , polysemy

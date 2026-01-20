@@ -45,8 +45,10 @@ library:
     - largeword
     - binary
     - containers
+    - crypton
     - extra
     - megaparsec
+    - memory
     - mtl
     - parser-combinators
 

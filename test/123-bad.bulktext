@@ -1,0 +1,9 @@
+( version 1 0 )
+( ns 20 #[5] 0xDEADFEED04 )
+( verifiable-ns ( 0x14-00 #[32] 0x3030303030303030-3030303030303030-3030303030303030-3030303030303030 )
+21 nil "123"
+"A minimalist non-boostrapping namespace for tests"
+( mnemonic/def nil "one" "1" 1 )
+( mnemonic/def nil "two" "2" 2 )
+( mnemonic/def nil "three" "3" 3 )
+)
