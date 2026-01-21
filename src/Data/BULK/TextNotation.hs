@@ -85,7 +85,7 @@ w8 :: (Applicative f) => Word8 -> f BB.Builder
 w8 = pure . BB.word8
 
 tokenP :: Parser BB.Builder
-tokenP = (smallIntP <|> smallArrayP <|> literalBytesP <|> decimalP <|> stringP <|> try coreP <|> try referenceP) <* eof
+tokenP = (smallIntP <|> smallArrayP <|> literalBytesP <|> stringP <|> coreP <|> try referenceP <|> decimalP) <* eof
 
 smallIntP :: Parser BB.Builder
 smallIntP = do

@@ -128,6 +128,7 @@ spec = describe "BULK" $ do
                 parseTextFile "test/bad nesting.bulktext" `shouldReturn` badNesting
             it "parses unknown references" $ do
                 "foo:bar quux:one foo:baz" `shouldDenote` (uncurry IntReference <$> [(0x14, 0), (0x15, 0), (0x14, 1)])
+                "123:one" `shouldDenote` [IntReference 0x14 0]
         --
         -- Core namespace and evaluation
         describe "core namespace" $ do
