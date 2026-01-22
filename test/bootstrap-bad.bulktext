@@ -1,0 +1,6 @@
+( version 1 0 )
+( verifiable-ns ( 0x14-00 #[32] 0x0000000000000000-0000000000000000-0000000000000000-0000000000000000 )
+20 nil "bootstrap"
+"A bootstrapping namespace that is supposed to fail"
+( mnemonic/def nil "oops" "this is not associated to any matching algorithm" )
+)

@@ -86,6 +86,16 @@ evalExpr (Form [Core 0x07, Nil, mnemonic, _doc, value]) = do
             noYield $ modify (set definingNamespace $ Just $ over namespaceDefinition (addName newName) $ over nextName (+ 1) $ over pendingDefinitions (newDef :) incompleteNS)
         Nothing ->
             throw [i|nil marker outside of namespace definition for name: #{mnemonicS}|]
+evalExpr (Form (Core 0x09 : identifier@(Form [Reference (UnassociatedNamespace marker) name, Array nsDigest]) : toDigest@(Nat marker' : Nil : mnemonic : _doc : _defs)))
+    | marker == marker' = do
+        let mnemonicS = fromRight "" $ toText mnemonic
+        foundNS <- gets $ find (matchOn identifier) . view knownNamespaces
+        case foundNS of
+            Just ns -> do
+                void $ modify (over associatedNamespaces (M.insert marker ns))
+                evalExpr $ Form (Core 0x09 : Form [Reference (AssociatedNamespace marker ns) name, Array nsDigest] : toDigest)
+            Nothing ->
+                throw [i|unable to bootstrap namespace: #{mnemonicS}|]
 evalExpr (Form (Core 0x09 : Form [digestRef, Array nsDigest] : toDigest@(Nat marker : Nil : mnemonic : _doc : defs))) = do
     qualifiedDigestRef <- throwNothing [i|failed to qualify reference: {digestRef}|] $ evalExpr digestRef
     digestName <- getName qualifiedDigestRef
@@ -110,7 +120,7 @@ evalExpr (Form (Core 0x09 : Form [digestRef, Array nsDigest] : toDigest@(Nat mar
                             throw [i|definitions lost for namespace: #{mnemonicS}|]
                 Left err -> do
                     throw [i|verification failed for namespace: #{mnemonicS} (#{err})|]
-        _ -> pure Nothing
+        _ -> throw "unknown digest"
 evalExpr (Form content) = do
     scope <- get
     (Just . Form . catMaybes <$>) . evalState scope $ traverse evalExpr content

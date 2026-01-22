@@ -34,6 +34,7 @@ data NamespaceDefinition
     , mnemonic :: Text
     , names :: [NameDefinition]
     }
+
 data FullNamespaceDefinition
     = FullNamespaceDefinition
     { unique :: Unique

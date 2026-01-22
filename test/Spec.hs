@@ -159,6 +159,9 @@ spec = describe "BULK" $ do
             it "has verifiable namespaces" $ do
                 decodeNotationFile @[()] [hash0] "test/123-bad.bulktext" `shouldReturn` Left "verification failed for namespace: 123 (expected digest 00000000000000000000000000000000 but got dd3bff1608fa25cc16ba90c0f8b4976e4a50b1d215cf8448e890e7cc4a4b0ff0)"
                 decodeNotationFile @[Int] [hash0] "test/123.bulktext" `shouldReturn` Right [1, 2, 3]
+            it "can bootstrap hashing" $ do
+                decodeNotationFile @[()] [hash0] "test/bootstrap-bad.bulktext" `shouldReturn` Left "unable to bootstrap namespace: bootstrap"
+                decodeNotationFile @[()] [hash0] "config/hash0.bulktext" `shouldReturn` Right []
 
         --
         -- Parser monad
@@ -273,7 +276,7 @@ hash0 :: FullNamespaceDefinition
 hash0 =
     defineNamespace $
         NamespaceDefinition
-            { matchID = (== Array "\xDE\xAD\xFE\xED\x04")
+            { matchID = shake128MatchID 0x00 $ Digest "\xE2\xEC\xDA\x49\x4A\x78\x19\x5B\x07\x03\x4A\xB1\x0B\x2C\x43\x90\xC9\x4C\x01\x25\x1B\x13\xD1\xA4\x83\xD2\x1E\x8B\x78\x1D\x70\x3D"
             , mnemonic = "hash0"
             , names =
                 [ shake128Name 0x00 "shake128"

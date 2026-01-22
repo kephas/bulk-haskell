@@ -5,7 +5,7 @@
 module Data.BULK.Hash where
 
 import Crypto.Hash (SHAKE128 (..), hashWith)
-import Data.BULK.Types (NameDefinition (..))
+import Data.BULK.Types (BULK (..), NameDefinition (..), Namespace (..))
 import Data.ByteArray (ByteArrayAccess, eq, length, takeView)
 import Data.ByteString (ByteString, toStrict)
 import Data.ByteString.Lazy (LazyByteString)
@@ -42,3 +42,9 @@ mkDigest = Digest . toStrict
 
 mkContent :: LazyByteString -> Content
 mkContent = Content . toStrict
+
+shake128MatchID :: Word8 -> Digest -> BULK -> Bool
+shake128MatchID name (Digest referenceDigest) (Form [Reference (UnassociatedNamespace _) name', Array targetDigest])
+    | name == name' =
+        toStrict targetDigest `isPrefixOf` referenceDigest
+shake128MatchID _name _digest _bulk = False
