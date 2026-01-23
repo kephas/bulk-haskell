@@ -5,23 +5,18 @@
 module Data.BULK.Hash where
 
 import Crypto.Hash (SHAKE128 (..), hashWith)
-import Data.BULK.Types (BULK (..), NameDefinition (..), Namespace (..))
+import Data.BULK.Types (CheckDigest (..))
 import Data.ByteArray (ByteArrayAccess, eq, length, takeView)
 import Data.ByteString (ByteString, toStrict)
 import Data.ByteString.Lazy (LazyByteString)
 import Data.String.Interpolate (i)
-import Data.Text (Text)
-import Data.Word (Word8)
 import Prelude hiding (length)
 
 newtype Digest = Digest ByteString
 newtype Content = Content ByteString
 
-shake128Name :: Word8 -> Text -> NameDefinition
-shake128Name marker mnemonic =
-    DigestName{..}
-  where
-    checkDigest ref content = shake128Digest (mkDigest ref) (mkContent content)
+runCheckDigest :: CheckDigest -> LazyByteString -> LazyByteString -> Either String ()
+runCheckDigest CheckShake128 ref content = shake128Digest (mkDigest ref) (mkContent content)
 
 shake128Digest :: Digest -> Content -> Either String ()
 shake128Digest (Digest referenceDigest) (Content content) =
@@ -42,9 +37,3 @@ mkDigest = Digest . toStrict
 
 mkContent :: LazyByteString -> Content
 mkContent = Content . toStrict
-
-shake128MatchID :: Word8 -> Digest -> BULK -> Bool
-shake128MatchID name (Digest referenceDigest) (Form [Reference (UnassociatedNamespace _) name', Array targetDigest])
-    | name == name' =
-        toStrict targetDigest `isPrefixOf` referenceDigest
-shake128MatchID _name _digest _bulk = False

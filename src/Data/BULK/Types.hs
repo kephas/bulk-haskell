@@ -3,15 +3,12 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE NoFieldSelectors #-}
 
 module Data.BULK.Types where
 
 import Data.ByteString.Lazy (ByteString)
 import Data.Text (Text)
-import Data.Unique (Unique)
 import Data.Word (Word8)
 import Witch (From (..), TryFrom (..), maybeTryFrom)
 
@@ -25,23 +22,16 @@ data BULK
 data Namespace
     = CoreNamespace
     | UnassociatedNamespace Int
-    | AssociatedNamespace Int FullNamespaceDefinition
-    deriving (Show)
+    | AssociatedNamespace NamespaceDefinition
+    deriving (Eq, Ord, Show)
 
 data NamespaceDefinition
     = NamespaceDefinition
-    { matchID :: BULK -> Bool
+    { matchID :: MatchID
     , mnemonic :: Text
     , names :: [NameDefinition]
     }
-
-data FullNamespaceDefinition
-    = FullNamespaceDefinition
-    { unique :: Unique
-    , matchID :: BULK -> Bool
-    , mnemonic :: Text
-    , names :: [NameDefinition]
-    }
+    deriving (Eq, Ord, Show)
 
 data NameDefinition
     = SelfEval
@@ -51,39 +41,21 @@ data NameDefinition
     | DigestName
         { marker :: Word8
         , mnemonic :: Text
-        , checkDigest :: ByteString -> ByteString -> Either String ()
+        , checkDigest :: CheckDigest
         }
+    deriving (Eq, Ord, Show)
+
+data CheckDigest = CheckShake128 deriving (Eq, Ord, Show)
 
 data Package = Package
-    { matchID :: BULK -> Bool
+    { matchID :: MatchID
     , nsIDs :: [BULK]
     }
+    deriving (Eq, Ord, Show)
+
+data MatchID = MatchNone | MatchEq BULK | MatchNamePrefix Word8 ByteString deriving (Eq, Ord, Show)
 
 data MatchBULK = MatchBULK {match :: BULK -> Bool, expected :: Text}
-
-instance Eq Namespace where
-    CoreNamespace == CoreNamespace = True
-    UnassociatedNamespace m1 == UnassociatedNamespace m2 = m1 == m2
-    AssociatedNamespace m1 ns1 == AssociatedNamespace m2 ns2 = m1 == m2 && ns1 == ns2
-    _ == _ = False
-
-instance Ord Namespace where
-    compare CoreNamespace CoreNamespace = EQ
-    compare CoreNamespace _ = LT
-    compare _ CoreNamespace = GT
-    compare (UnassociatedNamespace m1) (UnassociatedNamespace m2) = compare m1 m2
-    compare (UnassociatedNamespace _) (AssociatedNamespace _ _) = LT
-    compare (AssociatedNamespace _ _) (UnassociatedNamespace _) = GT
-    compare (AssociatedNamespace m1 _) (AssociatedNamespace m2 _) = compare m1 m2
-
-instance Eq FullNamespaceDefinition where
-    ns1 == ns2 = ns1.unique == ns2.unique
-
-instance Show FullNamespaceDefinition where
-    show (FullNamespaceDefinition{mnemonic}) = show mnemonic
-
-instance Ord FullNamespaceDefinition where
-    compare ns1 ns2 = compare ns1.unique ns2.unique
 
 instance From Int Namespace where
     from 0x10 = CoreNamespace
@@ -93,4 +65,4 @@ instance TryFrom Namespace Int where
     tryFrom = maybeTryFrom \case
         CoreNamespace -> Just 0x10
         UnassociatedNamespace ns -> Just ns
-        AssociatedNamespace _ _ -> Nothing
+        AssociatedNamespace _ -> Nothing

@@ -22,17 +22,16 @@ import Data.Text (Text)
 import Data.Text.Encoding.Error (OnDecodeError, lenientDecode)
 import Data.Text.Lazy qualified as LT
 import Data.Text.Lazy.Encoding qualified as LTE
-import Data.Word (Word8)
 import Polysemy (Sem, run)
 import Polysemy.Fail (Fail, runFail)
 import Polysemy.State (State, evalState, get, put)
 
 import Data.BULK.Core (encodeInt, pattern Core)
 import Data.BULK.Decode (VersionConstraint (ReadVersion), getStream, parseLazy)
-import Data.BULK.Encode (encodeNat, pattern IntReference, pattern Nat)
+import Data.BULK.Encode (encodeNat, pattern Nat)
 import Data.BULK.Eval (eval)
 import Data.BULK.TextNotation (parseTextNotation)
-import Data.BULK.Types (BULK (..), FullNamespaceDefinition (..), MatchBULK (..), NameDefinition (..), Namespace (AssociatedNamespace))
+import Data.BULK.Types (BULK (..), MatchBULK (..), NameDefinition (..), Namespace (AssociatedNamespace), NamespaceDefinition (..))
 import Data.Text.Encoding (encodeUtf8)
 
 class FromBULK a where
@@ -44,32 +43,30 @@ class ToBULK a where
 fromBULK :: (FromBULK a) => BULK -> Either String a
 fromBULK = fromBULKWith []
 
-fromBULKWith :: (FromBULK a) => [FullNamespaceDefinition] -> BULK -> Either String a
+fromBULKWith :: (FromBULK a) => [NamespaceDefinition] -> BULK -> Either String a
 fromBULKWith nss = runParser . parseBULK <=< eval nss
 
-decode :: (FromBULK a) => [FullNamespaceDefinition] -> ByteString -> Either String a
+decode :: (FromBULK a) => [NamespaceDefinition] -> ByteString -> Either String a
 decode nss = parseLazy (getStream ReadVersion) >=> fromBULKWith nss
 
-decodeNotation :: (FromBULK a) => [FullNamespaceDefinition] -> Text -> Either String a
+decodeNotation :: (FromBULK a) => [NamespaceDefinition] -> Text -> Either String a
 decodeNotation nss = parseTextNotation >=> decode nss
 
-decodeFile :: (FromBULK a) => [FullNamespaceDefinition] -> FilePath -> IO (Either String a)
+decodeFile :: (FromBULK a) => [NamespaceDefinition] -> FilePath -> IO (Either String a)
 decodeFile nss path = decode nss <$> B.readFile path
 
-decodeNotationFile :: (FromBULK a) => [FullNamespaceDefinition] -> FilePath -> IO (Either String a)
+decodeNotationFile :: (FromBULK a) => [NamespaceDefinition] -> FilePath -> IO (Either String a)
 decodeNotationFile nss = decodeNotationFileWith nss lenientDecode
 
-decodeNotationFileWith :: (FromBULK a) => [FullNamespaceDefinition] -> OnDecodeError -> FilePath -> IO (Either String a)
+decodeNotationFileWith :: (FromBULK a) => [NamespaceDefinition] -> OnDecodeError -> FilePath -> IO (Either String a)
 decodeNotationFileWith nss onError file = do
     bytes <- B.readFile file
     pure $ decodeNotation nss $ LT.toStrict $ LTE.decodeUtf8With onError bytes
 
 withForm :: (FromBULK a) => MatchBULK -> Parser a -> BULK -> Parser a
-withForm match parser (Form (op : content))
-    | match.match op = put (Just content) >> parser
+withForm MatchBULK{..} parser (Form (op : content))
+    | match op = put (Just content) >> parser
     | otherwise = fail [i|not the expected operator: (#{op}) (expected (#{expected}))|]
-  where
-    expected = match.expected
 withForm _ref _parser bulk = notExpected "form" bulk
 
 withStream :: (FromBULK a) => Parser a -> BULK -> Parser a
@@ -99,20 +96,20 @@ list = do
             traverse parseBULK xs
 
 notExpected :: (MonadFail m) => String -> BULK -> m a
-notExpected expected value = fail [i|not a #{expected}: (#{value})|]
+notExpected expected value = fail [i|cannot parse as #{expected}: #{value}|]
 
 instance FromBULK () where
     parseBULK Nil = pure ()
-    parseBULK bulk = fail [i|not a nil: #{bulk}|]
+    parseBULK bulk = notExpected "nil" bulk
 
 instance FromBULK Bool where
     parseBULK (Core 1) = pure True
     parseBULK (Core 2) = pure False
-    parseBULK bulk = fail [i|not a boolean: #{bulk}|]
+    parseBULK bulk = notExpected "boolean" bulk
 
 instance FromBULK Int where
     parseBULK (Nat n) = pure n
-    parseBULK bulk = fail [i|not an integer: #{bulk}|]
+    parseBULK bulk = notExpected "integer" bulk
 
 instance FromBULK BULK where
     parseBULK = pure
@@ -125,23 +122,13 @@ type Parser a = Sem '[Fail, State (Maybe [BULK])] a
 runParser :: Parser a -> Either String a
 runParser = run . evalState Nothing . runFail
 
-rawName :: Int -> Word8 -> MatchBULK
-rawName marker name = MatchBULK{..}
+nsName :: NamespaceDefinition -> Text -> MatchBULK
+nsName ns1@(NamespaceDefinition{..}) mnemonic1 =
+    MatchBULK{..}
   where
-    ref = IntReference marker name
-    match = (== ref)
-    expected = [i|#{ref}|]
-
-nsName :: FullNamespaceDefinition -> Text -> MatchBULK
-nsName ns1@(FullNamespaceDefinition{..}) mnemonic1 = MatchBULK{..}
-  where
-    match :: BULK -> Bool
-    match (Reference (AssociatedNamespace _ ns2@(FullNamespaceDefinition{})) name) = maybe False (matchDef ns2 name) foundNameDef
-    match _ = False
-    foundNameDef :: Maybe NameDefinition
-    foundNameDef = find (\name -> name.mnemonic == mnemonic1) names
-    matchDef :: FullNamespaceDefinition -> Word8 -> NameDefinition -> Bool
-    matchDef ns2 name def = ns1 == ns2 && name == def.marker
+    match = maybe (const False) matchDef $ find (\name -> name.mnemonic == mnemonic1) names
+    matchDef def (Reference (AssociatedNamespace ns2@(NamespaceDefinition{})) name) = ns1 == ns2 && name == def.marker
+    matchDef _ _ = False
     expected = [i|#{mnemonic}:#{mnemonic1}|]
 
 instance ToBULK Bool where

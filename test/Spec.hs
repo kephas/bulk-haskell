@@ -21,7 +21,6 @@ import Prelude hiding (readFile)
 import Data.BULK
 import Data.BULK.Core (pattern Core)
 import Data.BULK.Encode (pattern IntReference)
-import Data.BULK.Hash
 import Data.Text (Text)
 import Test.BULK.Decode
 import Test.QuickCheck.Instances.BULK ()
@@ -169,7 +168,7 @@ spec = describe "BULK" $ do
             it "parses Haskell values" $ do
                 decodeNotation [foo] "( version 1 0 ) ( ns w6[20] #[5] 0xDEADFEED01 ) ( 0x14-00 false true 42 )" `shouldBe` Right [Foo False True 42]
                 decodeNotation @[Foo] [foo] "( ns w6[20] #[5] 0xDEADFEED01 ) ( 0x14-00 false true 42 )" `shouldBe` Left "missing version"
-                decodeNotation @[Foo] [foo] "( version 1 0 ) ( ns w6[20] #[5] 0xDEADFEED01 ) ( 0x14-00 false true nil )" `shouldBe` Left "not an integer: Nil"
+                decodeNotation @[Foo] [foo] "( version 1 0 ) ( ns w6[20] #[5] 0xDEADFEED01 ) ( 0x14-00 false true nil )" `shouldBe` Left "cannot parse as integer: Nil"
                 decodeNotation @[Foo] [foo] "( version 1 0 ) ( ns w6[20] #[5] 0xDEADFEED01 ) ( 0x14-00 false true )" `shouldBe` Left "no next BULK expression"
                 decodeFile [foo] "test/foo.bulk" `shouldReturn` Right [Foo False True 42]
                 decodeFile [foo] "test/foos.bulk" `shouldReturn` Right [Foo True True 1, Foo True False 1, Foo False True 2, Foo False False 3, Foo True True 5, Foo False False 8]
@@ -250,38 +249,35 @@ userForm (Form (Core _ : _)) = False
 userForm (Form children) = all userForm children
 userForm _ = True
 
-foo :: FullNamespaceDefinition
+foo :: NamespaceDefinition
 foo =
-    defineNamespace $
-        NamespaceDefinition
-            { matchID = (== Array "\xDE\xAD\xFE\xED\x01")
-            , mnemonic = "foo"
-            , names =
-                [ SelfEval{marker = 0x00, mnemonic = "foo"}
-                ]
-            }
+    NamespaceDefinition
+        { matchID = MatchEq $ Array "\xDE\xAD\xFE\xED\x01"
+        , mnemonic = "foo"
+        , names =
+            [ SelfEval{marker = 0x00, mnemonic = "foo"}
+            ]
+        }
 
-bar :: FullNamespaceDefinition
+bar :: NamespaceDefinition
 bar =
-    defineNamespace $
-        NamespaceDefinition
-            { matchID = (== Array "\xDE\xAD\xFE\xED\x02")
-            , mnemonic = "bar"
-            , names =
-                [ SelfEval{marker = 0x00, mnemonic = "bar"}
-                ]
-            }
+    NamespaceDefinition
+        { matchID = MatchEq $ Array "\xDE\xAD\xFE\xED\x02"
+        , mnemonic = "bar"
+        , names =
+            [ SelfEval{marker = 0x00, mnemonic = "bar"}
+            ]
+        }
 
-hash0 :: FullNamespaceDefinition
+hash0 :: NamespaceDefinition
 hash0 =
-    defineNamespace $
-        NamespaceDefinition
-            { matchID = shake128MatchID 0x00 $ Digest "\xE2\xEC\xDA\x49\x4A\x78\x19\x5B\x07\x03\x4A\xB1\x0B\x2C\x43\x90\xC9\x4C\x01\x25\x1B\x13\xD1\xA4\x83\xD2\x1E\x8B\x78\x1D\x70\x3D"
-            , mnemonic = "hash0"
-            , names =
-                [ shake128Name 0x00 "shake128"
-                ]
-            }
+    NamespaceDefinition
+        { matchID = MatchNamePrefix 0x00 "\xE2\xEC\xDA\x49\x4A\x78\x19\x5B\x07\x03\x4A\xB1\x0B\x2C\x43\x90\xC9\x4C\x01\x25\x1B\x13\xD1\xA4\x83\xD2\x1E\x8B\x78\x1D\x70\x3D"
+        , mnemonic = "hash0"
+        , names =
+            [ DigestName{marker = 0x00, mnemonic = "shake128", checkDigest = CheckShake128}
+            ]
+        }
 
 data Foo = Foo Bool Bool Int deriving (Eq, Show)
 

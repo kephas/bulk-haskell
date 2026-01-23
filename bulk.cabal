@@ -30,12 +30,12 @@ library
       Data.BULK.Decode
       Data.BULK.Encode
       Data.BULK.Eval
+      Data.BULK.Eval.Types
       Data.BULK.Hash
       Data.BULK.Lens
       Data.BULK.TextNotation
       Data.BULK.ToFrom
       Data.BULK.Types
-      Data.BULK.Unsafe
   other-modules:
       Paths_bulk
   hs-source-dirs:
