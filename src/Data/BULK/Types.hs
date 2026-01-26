@@ -49,9 +49,17 @@ data NameDefinition
         , mnemonic :: Text
         , checkDigest :: CheckDigest
         }
+    | LazyName
+        { marker :: Word8
+        , mnemonic :: Text
+        , lazyFunction :: LazyFunction
+        }
     deriving (Eq, Ord, Show)
 
 data CheckDigest = CheckShake128 deriving (Eq, Ord, Show)
+
+data LazyFunction = Version | AssociateNS | CreatePackage | Import | Define | DefineMnemonic | VerifyNS
+    deriving (Eq, Ord, Show)
 
 data Package = Package
     { matchID :: MatchID

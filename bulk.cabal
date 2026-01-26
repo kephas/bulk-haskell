@@ -27,6 +27,7 @@ library
   exposed-modules:
       Data.BULK
       Data.BULK.Core
+      Data.BULK.Core.Types
       Data.BULK.Decode
       Data.BULK.Encode
       Data.BULK.Eval
