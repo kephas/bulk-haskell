@@ -19,6 +19,7 @@ import Data.ByteString.Lazy qualified as B
 import Data.List (find)
 import Data.String.Interpolate (i)
 import Data.Text (Text)
+import Data.Text.Encoding (encodeUtf8)
 import Data.Text.Encoding.Error (OnDecodeError, lenientDecode)
 import Data.Text.Lazy qualified as LT
 import Data.Text.Lazy.Encoding qualified as LTE
@@ -26,13 +27,12 @@ import Polysemy (Sem, run)
 import Polysemy.Fail (Fail, runFail)
 import Polysemy.State (State, evalState, get, put)
 
-import Data.BULK.Core (encodeInt, pattern Core)
+import Data.BULK.Core (encodeInt)
 import Data.BULK.Decode (VersionConstraint (ReadVersion), getStream, parseLazy)
 import Data.BULK.Encode (encodeNat, pattern Nat)
 import Data.BULK.Eval (eval)
 import Data.BULK.TextNotation (parseTextNotation)
-import Data.BULK.Types (BULK (..), MatchBULK (..), NameDefinition (..), Namespace (AssociatedNamespace), NamespaceDefinition (..))
-import Data.Text.Encoding (encodeUtf8)
+import Data.BULK.Types (BULK (..), MatchBULK (..), Name (..), NameDefinition (..), Namespace (AssociatedNamespace), NamespaceDefinition (..), pattern Core)
 
 class FromBULK a where
     parseBULK :: BULK -> Parser a
@@ -127,7 +127,7 @@ nsName ns1@(NamespaceDefinition{..}) mnemonic1 =
     MatchBULK{..}
   where
     match = maybe (const False) matchDef $ find (\name -> name.mnemonic == mnemonic1) names
-    matchDef def (Reference (AssociatedNamespace ns2@(NamespaceDefinition{})) name) = ns1 == ns2 && name == def.marker
+    matchDef def (Reference (Name (AssociatedNamespace ns2@(NamespaceDefinition{})) name)) = ns1 == ns2 && name == def.marker
     matchDef _ _ = False
     expected = [i|#{mnemonic}:#{mnemonic1}|]
 

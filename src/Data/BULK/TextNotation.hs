@@ -38,7 +38,7 @@ import Witch (from)
 
 import Data.BULK.Decode (VersionConstraint (ReadVersion), getStream, parseLazy)
 import Data.BULK.Encode (encodeExpr, encodeNat)
-import Data.BULK.Types (BULK (..), Namespace (..))
+import Data.BULK.Types (BULK (..), Name (..), Namespace (..))
 
 data NotationNS = NotationNS {namespace :: Namespace, usedNames :: Map Text Word8, availableNames :: [Word8]}
 
@@ -144,7 +144,7 @@ ensureRef :: Text -> Text -> Parser BULK
 ensureRef nsMnemonic nameMnemonic = do
     ns <- ensureNamespace
     name <- ensureName ns
-    pure $ Reference ns.namespace name
+    pure $ Reference $ Name ns.namespace name
   where
     ensureNamespace :: Parser NotationNS
     ensureNamespace = do

@@ -4,7 +4,7 @@
 
 module Data.BULK.Lens where
 
-import Control.Lens
+import Control.Lens (Prism', makePrisms, prism')
 import Data.Bits (Bits)
 import Data.ByteString.Lazy (ByteString)
 import Data.Either.Extra (eitherToMaybe)
@@ -12,10 +12,10 @@ import Data.List qualified as List
 import Data.Text (Text)
 
 import Data.BULK.Core (encodeInt, toIntegral)
-import Data.BULK.Decode
-import Data.BULK.Encode
+import Data.BULK.Decode (VersionConstraint (SetVersion), getExpression, getStream, parseLazy, toNat)
+import Data.BULK.Encode (encode, encodeNat)
 import Data.BULK.TextNotation (parseTextNotation)
-import Data.BULK.Types
+import Data.BULK.Types (BULK (Form))
 
 makePrisms ''BULK
 

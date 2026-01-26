@@ -16,8 +16,7 @@ import Data.Int (Int64)
 
 import Data.BULK.Decode (parseLazy, toNat)
 import Data.BULK.Encode (boundedPutter, encodeNat, unsafeEncodeBounded)
-import Data.BULK.Types (BULK (..), Namespace (CoreNamespace))
-import Data.Word (Word8)
+import Data.BULK.Types (BULK (..), pattern Core)
 
 version :: Int -> Int -> BULK
 version major minor =
@@ -26,9 +25,6 @@ version major minor =
 define :: BULK -> BULK -> BULK
 define ref value =
     Form [Core 0x06, ref, value]
-
-pattern Core :: Word8 -> BULK
-pattern Core name = (Reference CoreNamespace name)
 
 -- | Extract a signed integer from a raw BULK expression
 toIntegral :: (Integral a) => BULK -> Maybe a
@@ -68,4 +64,4 @@ blockSized (Array bs) =
 blockSized _ = Nothing
 
 encodeInt :: (Integral a) => a -> BULK
-encodeInt num = Form [Reference CoreNamespace 0x21, unsafeEncodeBounded undefined [boundedPutter putInt8, boundedPutter putInt16be, boundedPutter putInt32be, boundedPutter putInt64be] num]
+encodeInt num = Form [Core 0x21, unsafeEncodeBounded undefined [boundedPutter putInt8, boundedPutter putInt16be, boundedPutter putInt32be, boundedPutter putInt64be] num]

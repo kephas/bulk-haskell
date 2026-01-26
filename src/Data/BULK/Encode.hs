@@ -16,11 +16,11 @@ import Data.ByteString.Lazy qualified as BS
 import Data.Foldable (find, traverse_)
 import Data.List.Extra (list)
 import Data.Maybe (fromMaybe)
-
-import Data.BULK.Decode (toNat)
-import Data.BULK.Types (BULK (..))
 import Data.Word (Word8)
 import Witch (from, tryFrom)
+
+import Data.BULK.Decode (toNat)
+import Data.BULK.Types (BULK (..), Name (..))
 
 encode :: [BULK] -> BS.ByteString
 encode = BB.toLazyByteString . encodeSeq
@@ -45,12 +45,12 @@ encodeExpr (IntReference ns name)
 pattern IntReference :: Int -> Word8 -> BULK
 pattern IntReference ns num <- (toIntRef -> Just (ns, num))
     where
-        IntReference ns num = Reference (from ns) num
+        IntReference ns num = Reference $ Name (from ns) num
 
 {-# COMPLETE Nil, Form, Array, IntReference #-}
 
 toIntRef :: BULK -> Maybe (Int, Word8)
-toIntRef (Reference ns num) = either (const Nothing) (\marker -> Just (marker, num)) $ tryFrom ns
+toIntRef (Reference (Name ns num)) = either (const Nothing) (\marker -> Just (marker, num)) $ tryFrom ns
 toIntRef _ = Nothing
 
 encodeNat :: (Integral a, Bits a) => a -> BULK

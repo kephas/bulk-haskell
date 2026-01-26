@@ -22,7 +22,7 @@ import Test.QuickCheck.Instances.ByteString ()
 import Witch (via)
 import Prelude hiding (words)
 
-import Data.BULK (BULK (Array, Form, Reference), VersionConstraint (SetVersion), encode, getExpression, getStream, parseLazy, parseTextNotation, toIntegral, _BulkExpr, _Int, _Nat)
+import Data.BULK (BULK (Array, Form, Reference), Name (..), VersionConstraint (SetVersion), encode, getExpression, getStream, parseLazy, parseTextNotation, toIntegral, _BulkExpr, _Int, _Nat)
 import Test.BULK.Encode (bulkNum)
 
 parseStreamWith :: VersionConstraint -> ByteString -> Either String BULK
@@ -109,7 +109,7 @@ anySimpleRefBytes = (,) <$> anySimpleMarker <*> arbitraryByte
 anySimpleRef :: Gen BULK
 anySimpleRef = do
     (ns, name) <- anySimpleRefBytes
-    pure $ Reference (via @Int ns) (fromIntegral name)
+    pure $ Reference $ Name (via @Int ns) (fromIntegral name)
 
 -- Fixed ranges
 

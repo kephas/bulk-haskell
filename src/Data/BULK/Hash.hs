@@ -5,12 +5,13 @@
 module Data.BULK.Hash where
 
 import Crypto.Hash (SHAKE128 (..), hashWith)
-import Data.BULK.Types (CheckDigest (..))
 import Data.ByteArray (ByteArrayAccess, eq, length, takeView)
 import Data.ByteString (ByteString, toStrict)
 import Data.ByteString.Lazy (LazyByteString)
 import Data.String.Interpolate (i)
 import Prelude hiding (length)
+
+import Data.BULK.Types (CheckDigest (..))
 
 newtype Digest = Digest ByteString
 newtype Content = Content ByteString

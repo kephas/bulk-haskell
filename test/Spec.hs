@@ -19,8 +19,8 @@ import Witch (from, via)
 import Prelude hiding (readFile)
 
 import Data.BULK
-import Data.BULK.Core (pattern Core)
 import Data.BULK.Encode (pattern IntReference)
+import Data.BULK.Types (pattern Core)
 import Data.Text (Text)
 import Test.BULK.Decode
 import Test.QuickCheck.Instances.BULK ()
@@ -52,13 +52,13 @@ spec = describe "BULK" $ do
                 describe "read references" $ do
                     prop "reads one-word marker references" $
                         forAll anySimpleRefBytes $ \(marker, ref) ->
-                            pack [marker, ref] `shouldParseTo` Reference (via @Int marker) (fromIntegral ref)
+                            pack [marker, ref] `shouldParseTo` Reference (Name (via @Int marker) (fromIntegral ref))
                     prop "reads two-words marker references" $
                         forAll anySimpleRefBytes $ \(marker, ref) ->
-                            pack [0x7F, marker, ref] `shouldParseTo` Reference (from @Int $ 0x7F + fromIntegral marker) (fromIntegral ref)
+                            pack [0x7F, marker, ref] `shouldParseTo` Reference (Name (from @Int $ 0x7F + fromIntegral marker) (fromIntegral ref))
                     prop "reads three-words marker references" $
                         forAll anySimpleRefBytes $ \(marker, ref) ->
-                            pack [0x7F, 0xFF, marker, ref] `shouldParseTo` Reference (from @Int $ 0x7F + 0xFF + fromIntegral marker) (fromIntegral ref)
+                            pack [0x7F, 0xFF, marker, ref] `shouldParseTo` Reference (Name (from @Int $ 0x7F + 0xFF + fromIntegral marker) (fromIntegral ref))
                 it "rejects reserved markers" $
                     traverse_ readFailsOn reservedMarkers
             describe "files" $ do

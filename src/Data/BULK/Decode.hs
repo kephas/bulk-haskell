@@ -18,13 +18,11 @@ import Data.Bool (bool)
 import Data.ByteString.Lazy (ByteString)
 import Data.ByteString.Lazy qualified as BL
 import Data.Either.Extra (eitherToMaybe)
-import Data.Word (
-    Word8,
- )
+import Data.Word (Word8)
 import Witch (from)
 import Prelude hiding (readFile)
 
-import Data.BULK.Types (BULK (..), Namespace (..))
+import Data.BULK.Types (BULK (..), Name (..), pattern Core)
 
 -- | Syntax token
 data Syntax = FormEnd
@@ -68,7 +66,7 @@ getArray = do
 getReference :: Word8 -> Get BULK
 getReference marker = do
     ns <- bool getSpecial pure (marker < 0x7F) $ fromIntegral marker
-    Reference (from ns) <$> getWord8
+    Reference . Name (from ns) <$> getWord8
   where
     getSpecial acc = do
         next <- getInt
@@ -106,9 +104,9 @@ getStream (SetVersion _ _) = fail "this application only supports BULK version 1
 getStream ReadVersion = do
     result@(first : _) <- getSequence AtTopLevel
     case first of
-        Form [Reference CoreNamespace 0, Nat 1, Nat _] -> pure $ Form result
-        Form [Reference CoreNamespace 0, Nat _, Nat _] -> fail "this application only supports BULK version 1.x"
-        Form (Reference CoreNamespace 0 : _) -> fail "malformed version"
+        Form [Core 0, Nat 1, Nat _] -> pure $ Form result
+        Form [Core 0, Nat _, Nat _] -> fail "this application only supports BULK version 1.x"
+        Form (Core 0 : _) -> fail "malformed version"
         _ -> fail "missing version"
 
 parseIntegral :: (Integral a) => Either Syntax BULK -> Maybe a

@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE NoFieldSelectors #-}
 
 module Data.BULK.Types where
@@ -16,14 +17,19 @@ data BULK
     = Nil
     | Form [BULK]
     | Array ByteString
-    | Reference Namespace Word8
+    | Reference Name
     deriving (Eq, Ord, Show)
+
+data Name = Name Namespace Word8 deriving (Eq, Ord, Show)
 
 data Namespace
     = CoreNamespace
     | UnassociatedNamespace Int
     | AssociatedNamespace NamespaceDefinition
     deriving (Eq, Ord, Show)
+
+pattern Core :: Word8 -> BULK
+pattern Core name = (Reference (Name CoreNamespace name))
 
 data NamespaceDefinition
     = NamespaceDefinition
