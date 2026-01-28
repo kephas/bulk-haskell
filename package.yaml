@@ -51,6 +51,7 @@ library:
     - memory
     - mtl
     - parser-combinators
+    - hex-text
 
 executables:
   bulk-cli:

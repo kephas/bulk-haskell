@@ -63,11 +63,16 @@ data LazyFunction = Version | AssociateNS | CreatePackage | Import | Define | De
 
 data Package = Package
     { matchID :: MatchID
-    , nsIDs :: [BULK]
+    , nsIDs :: [Maybe NamespaceDefinition]
     }
     deriving (Eq, Ord, Show)
 
-data MatchID = MatchNone | MatchEq BULK | MatchNamePrefix Word8 ByteString deriving (Eq, Ord, Show)
+data MatchID
+    = MatchNone
+    | MatchEq BULK
+    | MatchNamePrefix Word8 ByteString
+    | MatchQualifiedNamePrefix Name ByteString
+    deriving (Eq, Ord, Show)
 
 data MatchBULK = MatchBULK {match :: BULK -> Bool, expected :: Text}
 

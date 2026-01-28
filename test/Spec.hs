@@ -14,7 +14,7 @@ import Data.String.Interpolate (i)
 import Data.Word (Word8)
 import Test.Hspec
 import Test.Hspec.QuickCheck (prop)
-import Test.QuickCheck (arbitrary, chooseInt, forAll, listOf, withMaxSuccess, (==>))
+import Test.QuickCheck (arbitrary, chooseInt, forAll, listOf)
 import Witch (from, via)
 import Prelude hiding (readFile)
 
@@ -23,7 +23,7 @@ import Data.BULK.Encode (pattern IntReference)
 import Data.BULK.Types (pattern Core)
 import Data.Text (Text)
 import Test.BULK.Decode
-import Test.QuickCheck.Instances.BULK ()
+import Test.QuickCheck.Instances.BULK (simpleBULK)
 
 main :: IO ()
 main = hspec spec
@@ -134,8 +134,6 @@ spec = describe "BULK" $ do
         describe "core namespace" $ do
             it "has basic references" $ do
                 version 1 0 `shouldBe` Form [IntReference 16 0, Array "\1", Array "\0"]
-            prop "has self-evaluating expressions" $ \expr ->
-                userForm expr ==> eval [] (Form [expr]) `shouldBe` Right (Form [expr])
             prop "has definitions" $ do
                 rvs <- nubBy ((==) `on` fst) <$> listOf ((,) <$> anySimpleRef <*> arbitrary)
                 let refs = map fst rvs
@@ -161,20 +159,22 @@ spec = describe "BULK" $ do
             it "can bootstrap hashing" $ do
                 decodeNotationFile @[()] [hash0] "test/bootstrap-bad.bulktext" `shouldReturn` Left "unable to bootstrap namespace: bootstrap"
                 decodeNotationFile @[()] [hash0] "config/hash0.bulktext" `shouldReturn` Right []
+            it "has verifiable packages" $ do
+                decodeNotationFile @[()] [hash0] "test/package-bad.bulktext" `shouldReturn` Left "verification failed for package (expected digest 00000000000000000000000000000000 but got a67d83372222b4bd8da851daa24e034b6a3ef3a50b69931b61966aa36a33ff1a)"
 
         --
         -- Parser monad
         describe "Parser monad" $ do
             it "parses Haskell values" $ do
-                decodeNotation [foo] "( version 1 0 ) ( ns w6[20] #[5] 0xDEADFEED01 ) ( 0x14-00 false true 42 )" `shouldBe` Right [Foo False True 42]
-                decodeNotation @[Foo] [foo] "( ns w6[20] #[5] 0xDEADFEED01 ) ( 0x14-00 false true 42 )" `shouldBe` Left "missing version"
-                decodeNotation @[Foo] [foo] "( version 1 0 ) ( ns w6[20] #[5] 0xDEADFEED01 ) ( 0x14-00 false true nil )" `shouldBe` Left "cannot parse as integer: Nil"
-                decodeNotation @[Foo] [foo] "( version 1 0 ) ( ns w6[20] #[5] 0xDEADFEED01 ) ( 0x14-00 false true )" `shouldBe` Left "no next BULK expression"
-                decodeFile [foo] "test/foo.bulk" `shouldReturn` Right [Foo False True 42]
-                decodeFile [foo] "test/foos.bulk" `shouldReturn` Right [Foo True True 1, Foo True False 1, Foo False True 2, Foo False False 3, Foo True True 5, Foo False False 8]
-                decodeNotationFile [foo] "test/foos.bulktext" `shouldReturn` Right [Foo True True 1, Foo True False 1, Foo False True 2, Foo False False 3, Foo True True 5, Foo False False 8]
-                decodeNotation [foo, bar] "( version 1 0 ) ( ns w6[20] #[5] 0xDEADFEED01 ) ( ns w6[21] #[5] 0xDEADFEED02 ) ( 0x15-00 1 ( 0x14-00 false true 42 ) )" `shouldBe` Right [Bar 1 (Foo False True 42)]
-                decodeNotation [foo, bar] "( version 1 0 ) ( package #[5] 0xDEADFEED03 #[5] 0xDEADFEED01 #[5] 0xDEADFEED02 ) ( import 20 2 #[5] 0xDEADFEED03 ) ( 0x15-00 1 ( 0x14-00 false true 42 ) )" `shouldBe` Right [Bar 1 (Foo False True 42)]
+                decodeNotation [hash0, foo] "( version 1 0 ) ( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( ns 21 ( hash0:shake128 #[4] 0x117A63BB ) ) ( foo:foo false true 42 )" `shouldBe` Right [Foo False True 42]
+                decodeNotation @[Foo] [hash0, foo] "( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( ns 21 ( hash0:shake128 #[4] 0x117A63BB ) ) ( foo:foo false true 42 )" `shouldBe` Left "missing version"
+                decodeNotation @[Foo] [hash0, foo] "( version 1 0 ) ( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( ns 21 ( hash0:shake128 #[4] 0x117A63BB ) ) ( foo:foo false true nil )" `shouldBe` Left "cannot parse as integer: Nil"
+                decodeNotation @[Foo] [hash0, foo] "( version 1 0 ) ( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( ns 21 ( hash0:shake128 #[4] 0x117A63BB ) ) ( foo:foo false true )" `shouldBe` Left "no next BULK expression"
+                decodeFile [hash0, foo] "test/foo.bulk" `shouldReturn` Right [Foo False True 42]
+                decodeFile [hash0, foo] "test/foos.bulk" `shouldReturn` Right [Foo True True 1, Foo True False 1, Foo False True 2, Foo False False 3, Foo True True 5, Foo False False 8]
+                decodeNotationFile [hash0, foo] "test/foos.bulktext" `shouldReturn` Right [Foo True True 1, Foo True False 1, Foo False True 2, Foo False False 3, Foo True True 5, Foo False False 8]
+                decodeNotation [hash0, foo, bar] "( version 1 0 ) ( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( ns 21 ( hash0:shake128 #[4] 0x117A63BB ) )  ( ns 22 ( hash0:shake128 #[4] 0x6744BA37 ) ) ( 0x16-00 1 ( 0x15-00 false true 42 ) )" `shouldBe` Right [Bar 1 (Foo False True 42)]
+                decodeNotation [hash0, foo, bar] "( version 1 0 ) ( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( package ( hash0:shake128 #[4] 0xD4912423 ) ( hash0:shake128 #[4] 0x117A63BB ) ( hash0:shake128 #[4] 0x6744BA37 ) ) ( import 21 2 ( hash0:shake128 #[4] 0xD4912423 ) ) ( 0x16-00 1 ( 0x15-00 false true 42 ) )" `shouldBe` Right [Bar 1 (Foo False True 42)]
 
         --
         -- Custom encoders
@@ -188,7 +188,9 @@ spec = describe "BULK" $ do
                 matchTo @Text [("foo", Array "foo"), ("γράφω", Array "\xCE\xB3\xCF\x81\xCE\xAC\xCF\x86\xCF\x89")]
 
     describe "slow tests" $ do
-        prop "reads really big generic arrays" $ withMaxSuccess 20 $ test_bigger_arrays_decoding 3
+        prop "reads really big generic arrays" $ test_bigger_arrays_decoding 3
+        prop "has self-evaluating expressions" $ forAll (listOf simpleBULK) $ \exprs ->
+            eval [] (Form exprs) `shouldBe` Right (Form exprs)
 
 nesting, primitives, badNesting :: Either String BULK
 nesting = Right $ Form [version 1 0, Form [], Form [Nil, Form [Nil], Form []]]
@@ -244,15 +246,20 @@ bigIntCases :: [(Word8, ByteString, Integer)]
 bigIntCases =
     [(0x21, "\x80\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00", -0x8000_0000_0000_0000_0000_0000_0000_0000)]
 
-userForm :: BULK -> Bool
-userForm (Form (Core _ : _)) = False
-userForm (Form children) = all userForm children
-userForm _ = True
+hash0 :: NamespaceDefinition
+hash0 =
+    NamespaceDefinition
+        { matchID = MatchNamePrefix 0x00 "\xE2\xEC\xDA\x49\x4A\x78\x19\x5B\x07\x03\x4A\xB1\x0B\x2C\x43\x90\xC9\x4C\x01\x25\x1B\x13\xD1\xA4\x83\xD2\x1E\x8B\x78\x1D\x70\x3D"
+        , mnemonic = "hash0"
+        , names =
+            [ DigestName{marker = 0x00, mnemonic = "shake128", checkDigest = CheckShake128}
+            ]
+        }
 
 foo :: NamespaceDefinition
 foo =
     NamespaceDefinition
-        { matchID = MatchEq $ Array "\xDE\xAD\xFE\xED\x01"
+        { matchID = MatchQualifiedNamePrefix (Name (AssociatedNamespace hash0) 0x00) "\x11\x7A\x63\xBB\xF0\x4F\x4A\x57\x3C\x6D\x29\xE0\xD0\x32\x4F\x60\x46\xEF\xF3\x14\xB9\xBC\xD9\x65\x87\x2A\x04\x55\x97\x8C\xA2\x1B"
         , mnemonic = "foo"
         , names =
             [ SelfEval{marker = 0x00, mnemonic = "foo"}
@@ -262,20 +269,10 @@ foo =
 bar :: NamespaceDefinition
 bar =
     NamespaceDefinition
-        { matchID = MatchEq $ Array "\xDE\xAD\xFE\xED\x02"
+        { matchID = MatchQualifiedNamePrefix (Name (AssociatedNamespace hash0) 0x00) "\x67\x44\xBA\x37\x14\x8D\x74\x5E\xE0\xB2\x57\x17\xA0\x12\xD1\xE2\x72\x76\x49\xC2\xBD\x28\x51\x98\xA5\x9A\x2D\xEE\x50\x65\x73\x91"
         , mnemonic = "bar"
         , names =
             [ SelfEval{marker = 0x00, mnemonic = "bar"}
-            ]
-        }
-
-hash0 :: NamespaceDefinition
-hash0 =
-    NamespaceDefinition
-        { matchID = MatchNamePrefix 0x00 "\xE2\xEC\xDA\x49\x4A\x78\x19\x5B\x07\x03\x4A\xB1\x0B\x2C\x43\x90\xC9\x4C\x01\x25\x1B\x13\xD1\xA4\x83\xD2\x1E\x8B\x78\x1D\x70\x3D"
-        , mnemonic = "hash0"
-        , names =
-            [ DigestName{marker = 0x00, mnemonic = "shake128", checkDigest = CheckShake128}
             ]
         }
 

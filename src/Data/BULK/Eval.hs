@@ -140,13 +140,16 @@ coreVersion [Nat @Int _, Nat @Int _] =
     pure Nothing
 coreVersion _ = throw TypeMismatch
 coreAssociateNS [Nat marker, expr] =
-    associateNS marker expr
+    findNS expr >>= associateNS marker
 coreAssociateNS _ = throw TypeMismatch
 corePackage (identifier@(Array _) : nss) =
-    noYield $ modify (knownPackages <|~ Package{matchID = MatchEq identifier, nsIDs = nss})
+    addPackage (MatchEq identifier) nss
+corePackage (Form [Reference digestName, Array pkgDigest] : nss) =
+    verifyQualifiedPackage digestName pkgDigest nss
 corePackage _ = throw TypeMismatch
 coreImport [Nat base, Nat count, expr] = do
-    foundNSS <- maybe [] (.nsIDs) <$> gets (find (matchOn expr) . view knownPackages)
+    qualifiedExpr <- evalExpr1 expr
+    foundNSS <- maybe [] (.nsIDs) <$> gets (find (matchOn qualifiedExpr) . view knownPackages)
     noYield $ traverse (uncurry associateNS) $ zip (take count [base ..]) foundNSS
 coreImport _ = throw TypeMismatch
 coreDefine [Reference name, expr] =
@@ -162,10 +165,34 @@ coreVerifyNS (Form [Reference digestName, Array nsDigest] : toDigest@(Nat marker
     verifyQualifiedNS digestName nsDigest marker mnemonic toDigest defs
 coreVerifyNS _ = throw TypeMismatch
 
-associateNS :: (Member (State Scope) r) => Int -> BULK -> Sem r (Maybe BULK)
-associateNS marker expr = do
-    foundNS <- gets (find (matchOn expr) . view knownNamespaces)
+associateNS :: (Members [State Scope, Error String] r) => Int -> Maybe NamespaceDefinition -> Sem r (Maybe BULK)
+associateNS marker foundNS =
     noYield $ modify (over associatedNamespaces (M.alter (const foundNS) marker))
+
+findNS :: (Members [State Scope, Error String] r) => BULK -> Sem r (Maybe NamespaceDefinition)
+findNS expr = do
+    qualifiedExpr <- evalExpr1 expr
+    gets (find (matchOn qualifiedExpr) . view knownNamespaces)
+
+evalExpr1 :: (Members [State Scope, Error String] r) => BULK -> Sem r BULK
+evalExpr1 expr =
+    fromMaybe expr <$> evalExpr expr
+
+addPackage :: (Members [State Scope, Error String] r) => MatchID -> [BULK] -> Sem r (Maybe BULK)
+addPackage match nss = do
+    foundNSS <- traverse findNS nss
+    noYield $ modify (knownPackages <|~ Package{matchID = match, nsIDs = foundNSS})
+
+verifyQualifiedPackage :: (Members [State Scope, Error String] r) => Name -> ByteString -> [BULK] -> Sem r (Maybe BULK)
+verifyQualifiedPackage digestName pkgDigest nss = do
+    digest <- retrieveDigest digestName
+    let reencoded = encode nss
+    case runCheckDigest digest pkgDigest reencoded of
+        Right () -> do
+            qualifiedName <- qualifyName digestName
+            addPackage (MatchQualifiedNamePrefix qualifiedName pkgDigest) nss
+        Left err -> do
+            throw [i|verification failed for package (#{err})|]
 
 defineImplicit :: (Members [State Scope, Error String] r) => BULK -> BULK -> Sem r (Maybe BULK)
 defineImplicit mnemonic value = do
@@ -193,7 +220,7 @@ verifyBootstrappedNS identifier marker name idRest mnemonic toDigest = do
 verifyQualifiedNS :: (Members [State Scope, Error String] r) => Name -> ByteString -> Int -> BULK -> [BULK] -> [BULK] -> Sem r (Maybe BULK)
 verifyQualifiedNS digestName nsDigest marker mnemonic toDigest defs = do
     digest <- retrieveDigest digestName
-    let reencoded = Data.BULK.Encode.encode toDigest
+    let reencoded = encode toDigest
         mnemonicS = fromRight "" $ toText mnemonic
     case runCheckDigest digest nsDigest reencoded of
         Right () -> do
@@ -225,6 +252,8 @@ runMatchID (MatchEq bulk1) bulk2 =
     bulk1 == bulk2
 runMatchID (MatchNamePrefix name referenceDigest) (Form [Reference (Name (UnassociatedNamespace _) name'), Array targetDigest])
     | name == name' = toStrict targetDigest `isPrefixOf` toStrict referenceDigest
+runMatchID (MatchQualifiedNamePrefix (Name (AssociatedNamespace ns) name) referenceDigest) (Form [Reference (Name (AssociatedNamespace ns') name'), Array targetDigest])
+    | ns == ns' && name == name' = toStrict targetDigest `isPrefixOf` toStrict referenceDigest
 runMatchID _ _ = False
 
 noYield :: (Functor f) => f a -> f (Maybe BULK)

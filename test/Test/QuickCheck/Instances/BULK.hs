@@ -10,33 +10,42 @@ import Witch.From (from)
 import Prelude hiding (words)
 
 instance Arbitrary BULK where
-    arbitrary = frequency [(1, nil), (32, simpleForm), (16, biggerForm), (2, form), (4, array), (8, ref)]
+    arbitrary = bulk arbitrary
     shrink Nil = []
     shrink (Form exprs) = Form <$> shrink exprs
     shrink (Array bs) = Array <$> shrink bs
     shrink (Reference (Name ns name)) = Reference <$> (Name <$> shrink ns <*> shrink name)
 
 instance Arbitrary Namespace where
-    arbitrary = from <$> frequency [(4, chooseInt (0x10, 0x17)), (16, chooseInt (0x18, 0x7F)), (1, chooseInt (0x80, 0xFFFF))]
+    arbitrary = from <$> frequency [(4, chooseInt (0x10, 0x13)), (16, chooseInt (0x14, 0x7F)), (1, chooseInt (0x80, 0xFFFF))]
 
-nil, array, ref, simpleForm, biggerForm, form :: Gen BULK
+simpleNS :: Gen Namespace
+simpleNS = from <$> chooseInt (0x14, 0x7F)
+
+simpleBULK :: Gen BULK
+simpleBULK = bulk simpleNS
+
+nil, array :: Gen BULK
 nil = pure Nil
 array = Array <$> arbitrary
-ref = Reference <$> (Name <$> arbitrary <*> arbitrary)
-simpleForm = do
-    operator <- ref
-    operand <- arbitrary
-    pure $ Form [operator, operand]
-biggerForm = do
-    operator <- ref
-    size <- getSize
-    operands <- list size
-    pure $ Form $ operator : operands
-form = Form <$> sized list
 
-list :: Int -> Gen [BULK]
-list 0 = pure []
-list n = do
+bulk, ref, simpleForm, biggerForm, form :: Gen Namespace -> Gen BULK
+bulk ns = frequency [(1, nil), (32, simpleForm ns), (16, biggerForm ns), (2, form ns), (4, array), (8, ref ns)]
+ref ns = Reference <$> (Name <$> ns <*> arbitrary)
+simpleForm ns = do
+    operator <- ref ns
+    operand <- bulk ns
+    pure $ Form [operator, operand]
+biggerForm ns = do
+    operator <- ref ns
+    size <- getSize
+    operands <- list ns size
+    pure $ Form $ operator : operands
+form ns = Form <$> sized (list ns)
+
+list :: Gen Namespace -> Int -> Gen [BULK]
+list _ns 0 = pure []
+list ns n = do
     headSize <- chooseInt (1, n)
     let restSize = n - headSize
-    (:) <$> resize (headSize - 1) arbitrary <*> list restSize
+    (:) <$> resize (headSize - 1) (bulk ns) <*> list ns restSize

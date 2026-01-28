@@ -1,3 +1,4 @@
 ( version 1 0 )
-( bulk:ns w6[20] #[5] 0xDEADFEED01 )
-( 0x14-00 bulk:false bulk:true 42 )
+( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) )
+( ns 21 ( hash0:shake128 #[4] 0x117A63BB ) )
+( foo:foo bulk:false bulk:true 42 )
