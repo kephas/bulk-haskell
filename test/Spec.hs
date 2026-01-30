@@ -1,6 +1,7 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE NumericUnderscores #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE QuasiQuotes #-}
@@ -20,6 +21,7 @@ import Prelude hiding (readFile)
 
 import Data.BULK
 import Data.BULK.Encode (pattern IntReference)
+import Data.BULK.Eval (mkContext)
 import Data.BULK.Types (pattern Core)
 import Data.Text (Text)
 import Test.BULK.Decode
@@ -118,14 +120,14 @@ spec = describe "BULK" $ do
                 "( version 1 0 ) true false ( define 0x1400 ( subst ( concat ( arg 1 ) ( arg 2 ) ) ) )" `shouldDenote` [version 1 0, Core 1, Core 2, Form [Core 6, IntReference 0x14 0, Form [Core 0x0B, Form [Core 0x0A, Form [Core 0x0C, Array "\1"], Form [Core 0x0C, Array "\2"]]]]]
                 "( bulk:ns 0x1400 #[4] 0x0011-2233 ) ( bulk:ns-mnemonic 0x1400 )" `shouldDenote` [Form [Core 3, IntReference 0x14 0, Array "\x00\x11\x22\x33"], Form [Core 8, IntReference 0x14 0]]
             it "parses UTF-8 strings" $ do
-                parseTextNotation [i|"foo"|] `shouldBe` Right "\xC3\&foo"
-                parseTextNotation [i|"foo" "quuux"|] `shouldBe` Right "\xC3\&foo\xC5quuux"
-                parseTextNotation [i|"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor"|] `shouldBe` Right "\x03\xC1\78Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor"
-                parseTextNotation [i|"関数型プログラミング"|] `shouldBe` Right "\xDE\233\150\162\230\149\176\229\158\139\227\131\151\227\131\173\227\130\176\227\131\169\227\131\159\227\131\179\227\130\176"
+                parseNotation [i|"foo"|] `shouldBe` Right "\xC3\&foo"
+                parseNotation [i|"foo" "quuux"|] `shouldBe` Right "\xC3\&foo\xC5quuux"
+                parseNotation [i|"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor"|] `shouldBe` Right "\x03\xC1\78Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor"
+                parseNotation [i|"関数型プログラミング"|] `shouldBe` Right "\xDE\233\150\162\230\149\176\229\158\139\227\131\151\227\131\173\227\130\176\227\131\169\227\131\159\227\131\179\227\130\176"
             it "parses example files" $ do
-                parseTextFile "test/nesting.bulktext" `shouldReturn` nesting
-                parseTextFile "test/primitives.bulktext" `shouldReturn` primitives
-                parseTextFile "test/bad nesting.bulktext" `shouldReturn` badNesting
+                parseNotationFile "test/nesting.bulktext" `shouldReturn` nesting
+                parseNotationFile "test/primitives.bulktext" `shouldReturn` primitives
+                parseNotationFile "test/bad nesting.bulktext" `shouldReturn` badNesting
             it "parses unknown references" $ do
                 "foo:bar quux:one foo:baz" `shouldDenote` (uncurry IntReference <$> [(0x14, 0), (0x15, 0), (0x14, 1)])
                 "123:one" `shouldDenote` [IntReference 0x14 0]
@@ -139,9 +141,9 @@ spec = describe "BULK" $ do
                 let refs = map fst rvs
                     values = map snd rvs
                     definitions = zipWith define refs values
-                pure $ eval [] (Form $ definitions ++ refs) `shouldBe` Right (Form values)
+                pure $ eval' [] (Form $ definitions ++ refs) `shouldBe` Right (Form values)
             it "respect scoping rule" do
-                shouldFail $ decodeNotation @[[Int]] [] "( ( bulk:define 0x1400 42 ) 0x1400 ) ( 0x1400 )"
+                shouldFail $ decodeNotation @[[Int]] (mkContext []) "( ( bulk:define 0x1400 42 ) 0x1400 ) ( 0x1400 )"
             describe "parses numbers" $ do
                 it "small ints" $ for_ smallWords \w ->
                     encodeSmallInt w `shouldParseToInt` fromIntegral w
@@ -154,27 +156,31 @@ spec = describe "BULK" $ do
                     for_ bidirectionalIntCases \(kind, bytes, value) ->
                         encodeInt value `shouldBe` Form [Core kind, Array bytes]
             it "has verifiable namespaces" $ do
-                decodeNotationFile @[()] [hash0] "test/123-bad.bulktext" `shouldReturn` Left "verification failed for namespace: 123 (expected digest 00000000000000000000000000000000 but got dd3bff1608fa25cc16ba90c0f8b4976e4a50b1d215cf8448e890e7cc4a4b0ff0)"
-                decodeNotationFile @[Int] [hash0] "test/123.bulktext" `shouldReturn` Right [1, 2, 3]
+                decodeNotationFile @[()] ctx0 "test/123-bad.bulktext" `shouldReturn` Left "verification failed for namespace: 123 (expected digest 00000000000000000000000000000000 but got dd3bff1608fa25cc16ba90c0f8b4976e4a50b1d215cf8448e890e7cc4a4b0ff0)"
+                decodeNotationFile @[Int] ctx0 "test/123.bulktext" `shouldReturn` Right [1, 2, 3]
             it "can bootstrap hashing" $ do
-                decodeNotationFile @[()] [hash0] "test/bootstrap-bad.bulktext" `shouldReturn` Left "unable to bootstrap namespace: bootstrap"
-                decodeNotationFile @[()] [hash0] "config/hash0.bulktext" `shouldReturn` Right []
+                decodeNotationFile @[()] ctx0 "test/bootstrap-bad.bulktext" `shouldReturn` Left "unable to bootstrap namespace: bootstrap"
+                decodeNotationFile @[()] ctx0 "config/hash0.bulktext" `shouldReturn` Right []
             it "has verifiable packages" $ do
-                decodeNotationFile @[()] [hash0] "test/package-bad.bulktext" `shouldReturn` Left "verification failed for package (expected digest 00000000000000000000000000000000 but got 7a6dcf4b2cf07e63b60b893c6ac193b55ce38857e18148afc5b113189324747c)"
+                decodeNotationFile @[()] ctx0 "test/package-bad.bulktext" `shouldReturn` Left "verification failed for package (expected digest 00000000000000000000000000000000 but got 7a6dcf4b2cf07e63b60b893c6ac193b55ce38857e18148afc5b113189324747c)"
+            it "has lasting namespaces and packages" $ do
+                ctx <- loadNotationFiles ctx0 ["test/config/foo.bulktext", "test/config/bar.bulktext", "test/config/foobar.bulktext"]
+                decodeNotation ctx "( version 1 0 ) ( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( import 21 2 ( hash0:shake128 #[4] 0x7A6DCF4B ) ) ( 0x16-00 1 ( 0x15-00 false true 42 ) )" `shouldBe` Right [Bar 1 (Foo False True 42)]
 
         --
         -- Parser monad
         describe "Parser monad" $ do
             it "parses Haskell values" $ do
-                decodeNotation [hash0, foo] "( version 1 0 ) ( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( ns 21 ( hash0:shake128 #[4] 0x117A63BB ) ) ( foo:foo false true 42 )" `shouldBe` Right [Foo False True 42]
-                decodeNotation @[Foo] [hash0, foo] "( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( ns 21 ( hash0:shake128 #[4] 0x117A63BB ) ) ( foo:foo false true 42 )" `shouldBe` Left "missing version"
-                decodeNotation @[Foo] [hash0, foo] "( version 1 0 ) ( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( ns 21 ( hash0:shake128 #[4] 0x117A63BB ) ) ( foo:foo false true nil )" `shouldBe` Left "cannot parse as integer: Nil"
-                decodeNotation @[Foo] [hash0, foo] "( version 1 0 ) ( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( ns 21 ( hash0:shake128 #[4] 0x117A63BB ) ) ( foo:foo false true )" `shouldBe` Left "no next BULK expression"
-                decodeFile [hash0, foo] "test/foo.bulk" `shouldReturn` Right [Foo False True 42]
-                decodeFile [hash0, foo] "test/foos.bulk" `shouldReturn` Right [Foo True True 1, Foo True False 1, Foo False True 2, Foo False False 3, Foo True True 5, Foo False False 8]
-                decodeNotationFile [hash0, foo] "test/foos.bulktext" `shouldReturn` Right [Foo True True 1, Foo True False 1, Foo False True 2, Foo False False 3, Foo True True 5, Foo False False 8]
-                decodeNotation [hash0, foo, bar] "( version 1 0 ) ( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( ns 21 ( hash0:shake128 #[4] 0x117A63BB ) )  ( ns 22 ( hash0:shake128 #[4] 0x6744BA37 ) ) ( 0x16-00 1 ( 0x15-00 false true 42 ) )" `shouldBe` Right [Bar 1 (Foo False True 42)]
-                decodeNotation [hash0, foo, bar] "( version 1 0 ) ( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( package ( hash0:shake128 #[4] 0x70E49F22 ) nil ( hash0:shake128 #[4] 0x117A63BB ) ( hash0:shake128 #[4] 0x6744BA37 ) ) ( import 21 2 ( hash0:shake128 #[4] 0x70E49F22 ) ) ( 0x16-00 1 ( 0x15-00 false true 42 ) )" `shouldBe` Right [Bar 1 (Foo False True 42)]
+                ctx <- loadNotationFiles ctx0 ["test/config/foo.bulktext", "test/config/bar.bulktext", "test/config/foobar.bulktext"]
+                decodeNotation ctx "( version 1 0 ) ( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( ns 21 ( hash0:shake128 #[4] 0x117A63BB ) ) ( foo:foo false true 42 )" `shouldBe` Right [Foo False True 42]
+                decodeNotation @[Foo] ctx "( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( ns 21 ( hash0:shake128 #[4] 0x117A63BB ) ) ( foo:foo false true 42 )" `shouldBe` Left "missing version"
+                decodeNotation @[Foo] ctx "( version 1 0 ) ( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( ns 21 ( hash0:shake128 #[4] 0x117A63BB ) ) ( foo:foo false true nil )" `shouldBe` Left "cannot parse as integer: Nil"
+                decodeNotation @[Foo] ctx "( version 1 0 ) ( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( ns 21 ( hash0:shake128 #[4] 0x117A63BB ) ) ( foo:foo false true )" `shouldBe` Left "no next BULK expression"
+                decodeFile ctx "test/foo.bulk" `shouldReturn` Right [Foo False True 42]
+                decodeFile ctx "test/foos.bulk" `shouldReturn` Right [Foo True True 1, Foo True False 1, Foo False True 2, Foo False False 3, Foo True True 5, Foo False False 8]
+                decodeNotationFile ctx "test/foos.bulktext" `shouldReturn` Right [Foo True True 1, Foo True False 1, Foo False True 2, Foo False False 3, Foo True True 5, Foo False False 8]
+                decodeNotation ctx "( version 1 0 ) ( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( ns 21 ( hash0:shake128 #[4] 0x117A63BB ) )  ( ns 22 ( hash0:shake128 #[4] 0x6744BA37 ) ) ( 0x16-00 1 ( foo:foo false true 42 ) )" `shouldBe` Right [Bar 1 (Foo False True 42)]
+                decodeNotation ctx "( version 1 0 ) ( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( package ( hash0:shake128 #[4] 0x70E49F22 ) nil ( hash0:shake128 #[4] 0x117A63BB ) ( hash0:shake128 #[4] 0x6744BA37 ) ) ( import 21 2 ( hash0:shake128 #[4] 0x70E49F22 ) ) ( 0x16-00 1 ( foo:foo false true 42 ) )" `shouldBe` Right [Bar 1 (Foo False True 42)]
 
         --
         -- Custom encoders
@@ -190,7 +196,7 @@ spec = describe "BULK" $ do
     describe "slow tests" $ do
         prop "reads really big generic arrays" $ test_bigger_arrays_decoding 3
         prop "has self-evaluating expressions" $ forAll (listOf simpleBULK) $ \exprs ->
-            eval [] (Form exprs) `shouldBe` Right (Form exprs)
+            eval' [] (Form exprs) `shouldBe` Right (Form exprs)
 
 nesting, primitives, badNesting :: Either String BULK
 nesting = Right $ Form [version 1 0, Form [], Form [Nil, Form [Nil], Form []]]
@@ -256,6 +262,9 @@ hash0 =
             ]
         }
 
+ctx0 :: Context
+ctx0 = mkContext [hash0]
+
 foo :: NamespaceDefinition
 foo =
     NamespaceDefinition
@@ -287,6 +296,9 @@ data Bar = Bar Int Foo deriving (Eq, Show)
 instance FromBULK Bar where
     parseBULK = withForm (nsName bar "bar") do
         Bar <$> nextBULK <*> nextBULK
+
+eval' :: [NamespaceDefinition] -> BULK -> Either String BULK
+eval' nss = eval (mkContext nss)
 
 matchTo :: (ToBULK a) => [(a, BULK)] -> IO ()
 matchTo = traverse_ (uncurry $ shouldBe . toBULK)

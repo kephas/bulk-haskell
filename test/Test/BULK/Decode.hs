@@ -22,7 +22,7 @@ import Test.QuickCheck.Instances.ByteString ()
 import Witch (via)
 import Prelude hiding (words)
 
-import Data.BULK (BULK (Array, Form, Reference), Name (..), VersionConstraint (SetVersion), encode, getExpression, getStream, parseLazy, parseTextNotation, toIntegral, _BulkExpr, _Int, _Nat)
+import Data.BULK (BULK (Array, Form, Reference), Name (..), VersionConstraint (SetVersion), encode, getExpression, getStream, parseLazy, parseNotation, toIntegral, _BulkExpr, _Int, _Nat)
 import Test.BULK.Encode (bulkNum)
 
 parseStreamWith :: VersionConstraint -> ByteString -> Either String BULK
@@ -56,7 +56,7 @@ shouldParseToInt :: ByteString -> Int -> Expectation
 shouldParseToInt = shouldParseToPrism _Int
 
 shouldDenote :: Text -> [BULK] -> Expectation
-text `shouldDenote` list = (parseTextNotation text >>= parseLazy (getStream $ SetVersion 1 0)) `shouldBe` Right (Form list)
+text `shouldDenote` list = (parseNotation text >>= parseLazy (getStream $ SetVersion 1 0)) `shouldBe` Right (Form list)
 
 unDigits :: [Word8] -> Integer
 unDigits = D.unDigits 256 . map fromIntegral

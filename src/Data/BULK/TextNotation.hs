@@ -27,7 +27,7 @@ import Data.Set (elems)
 import Data.String.Interpolate (i)
 import Data.Text (Text)
 import Data.Text qualified as T
-import Data.Text.Encoding.Error (OnDecodeError, lenientDecode)
+import Data.Text.Encoding.Error (lenientDecode)
 import Data.Text.Lazy qualified as LT
 import Data.Text.Lazy.Encoding qualified as LTE
 import Data.Word (Word8)
@@ -46,19 +46,24 @@ data NamespaceMap = NamespaceMap {usedNamespaces :: Map Text NotationNS, nextMar
 
 type Parser = ParsecT String Text (State NamespaceMap)
 
-parseTextNotation :: Text -> Either String ByteString
-parseTextNotation source = do
+parseNotation :: Text -> Either String ByteString
+parseNotation source = do
     lexemes <- runParser showFail lexerP source
     builders <- flip evalState bulkProfile $ sequence <$> traverse parseTextToken lexemes
     pure $ BB.toLazyByteString $ mconcat builders
 
-parseTextFile :: FilePath -> IO (Either String BULK)
-parseTextFile = parseTextFileWith lenientDecode ReadVersion
+parseNotationFile :: FilePath -> IO (Either String BULK)
+parseNotationFile = parseNotationFileWith ReadVersion
 
-parseTextFileWith :: OnDecodeError -> VersionConstraint -> FilePath -> IO (Either String BULK)
-parseTextFileWith onerror constraint file = do
+parseNotationFileWith :: VersionConstraint -> FilePath -> IO (Either String BULK)
+parseNotationFileWith constraint file = do
+    text <- readTextFile file
+    pure $ parseNotation text >>= parseLazy (getStream constraint)
+
+readTextFile :: FilePath -> IO Text
+readTextFile file = do
     bytes <- B.readFile file
-    pure $ parseTextNotation (LT.toStrict $ LTE.decodeUtf8With onerror bytes) >>= parseLazy (getStream constraint)
+    pure $ LT.toStrict $ LTE.decodeUtf8With lenientDecode bytes
 
 bulkCoreNames :: (Integral a) => [(Text, a)]
 bulkCoreNames = zip (T.words "version true false ns package import define mnemonic/def ns-mnemonic verifiable-ns concat subst arg rest stringenc iana-charset codepage string string* blob nested-bulk indexable indexed-bulk indexed-array unsigned-int signed-int fraction binary-float decimal-float binary-fixed decimal-fixed decimal2 prefix prefix* postfix postfix* arity") ([0x0 .. 0xD] ++ [0x10 .. 0x19] ++ [0x20 .. 0x27] ++ [0x30 .. 0x34])

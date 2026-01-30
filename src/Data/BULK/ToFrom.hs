@@ -13,7 +13,7 @@
 
 module Data.BULK.ToFrom where
 
-import Control.Monad ((<=<), (>=>))
+import Control.Monad (foldM, (<=<), (>=>))
 import Data.ByteString.Lazy (ByteString)
 import Data.ByteString.Lazy qualified as B
 import Data.List (find)
@@ -28,10 +28,12 @@ import Polysemy.Fail (Fail, runFail)
 import Polysemy.State (State, evalState, get, put)
 
 import Data.BULK.Core (encodeInt)
+import Data.BULK.Debug (debug)
 import Data.BULK.Decode (VersionConstraint (ReadVersion), getStream, parseLazy)
 import Data.BULK.Encode (encodeNat, pattern Nat)
-import Data.BULK.Eval (eval)
-import Data.BULK.TextNotation (parseTextNotation)
+import Data.BULK.Eval (eval, evalExpr, execContext, mkContext)
+import Data.BULK.Eval.Types (Context (Context))
+import Data.BULK.TextNotation (parseNotation, parseNotationFile)
 import Data.BULK.Types (BULK (..), MatchBULK (..), Name (..), NameDefinition (..), Namespace (AssociatedNamespace), NamespaceDefinition (..), pattern Core)
 
 class FromBULK a where
@@ -41,32 +43,40 @@ class ToBULK a where
     toBULK :: a -> BULK
 
 fromBULK :: (FromBULK a) => BULK -> Either String a
-fromBULK = fromBULKWith []
+fromBULK = fromBULKWith $ mkContext []
 
-fromBULKWith :: (FromBULK a) => [NamespaceDefinition] -> BULK -> Either String a
-fromBULKWith nss = runParser . parseBULK <=< eval nss
+fromBULKWith :: (FromBULK a) => Context -> BULK -> Either String a
+fromBULKWith ctx = runParser . parseBULK <=< eval ctx
 
-decode :: (FromBULK a) => [NamespaceDefinition] -> ByteString -> Either String a
-decode nss = parseLazy (getStream ReadVersion) >=> fromBULKWith nss
+decode :: (FromBULK a) => Context -> ByteString -> Either String a
+decode ctx = parseLazy (getStream ReadVersion) >=> fromBULKWith ctx
 
-decodeNotation :: (FromBULK a) => [NamespaceDefinition] -> Text -> Either String a
-decodeNotation nss = parseTextNotation >=> decode nss
+decodeNotation :: (FromBULK a) => Context -> Text -> Either String a
+decodeNotation ctx = parseNotation >=> decode ctx
 
-decodeFile :: (FromBULK a) => [NamespaceDefinition] -> FilePath -> IO (Either String a)
-decodeFile nss path = decode nss <$> B.readFile path
+decodeFile :: (FromBULK a) => Context -> FilePath -> IO (Either String a)
+decodeFile ctx path = decode ctx <$> B.readFile path
 
-decodeNotationFile :: (FromBULK a) => [NamespaceDefinition] -> FilePath -> IO (Either String a)
-decodeNotationFile nss = decodeNotationFileWith nss lenientDecode
+decodeNotationFile :: (FromBULK a) => Context -> FilePath -> IO (Either String a)
+decodeNotationFile ctx = decodeNotationFileWith ctx lenientDecode
 
-decodeNotationFileWith :: (FromBULK a) => [NamespaceDefinition] -> OnDecodeError -> FilePath -> IO (Either String a)
-decodeNotationFileWith nss onError file = do
+decodeNotationFileWith :: (FromBULK a) => Context -> OnDecodeError -> FilePath -> IO (Either String a)
+decodeNotationFileWith ctx onError file = do
     bytes <- B.readFile file
-    pure $ decodeNotation nss $ LT.toStrict $ LTE.decodeUtf8With onError bytes
+    pure $ decodeNotation ctx $ LT.toStrict $ LTE.decodeUtf8With onError bytes
+
+loadNotationFiles :: Context -> [FilePath] -> IO Context
+loadNotationFiles = foldM loadNotationFile
+  where
+    loadNotationFile (Context scope) file = do
+        bulk <- parseNotationFile file >>= force
+        force $ execContext $ put scope >> evalExpr bulk
+    force = either fail pure
 
 withForm :: (FromBULK a) => MatchBULK -> Parser a -> BULK -> Parser a
 withForm MatchBULK{..} parser (Form (op : content))
     | match op = put (Just content) >> parser
-    | otherwise = fail [i|not the expected operator: (#{op}) (expected (#{expected}))|]
+    | otherwise = fail [i|not the expected operator: (#{debug op}) (expected (#{expected}))|]
 withForm _ref _parser bulk = notExpected "form" bulk
 
 withStream :: (FromBULK a) => Parser a -> BULK -> Parser a
@@ -127,7 +137,7 @@ nsName ns1@(NamespaceDefinition{..}) mnemonic1 =
     MatchBULK{..}
   where
     match = maybe (const False) matchDef $ find (\name -> name.mnemonic == mnemonic1) names
-    matchDef def (Reference (Name (AssociatedNamespace ns2@(NamespaceDefinition{})) name)) = ns1 == ns2 && name == def.marker
+    matchDef def (Reference (Name (AssociatedNamespace ns2@(NamespaceDefinition{})) name)) = ns1.matchID == ns2.matchID && name == def.marker
     matchDef _ _ = False
     expected = [i|#{mnemonic}:#{mnemonic1}|]
 

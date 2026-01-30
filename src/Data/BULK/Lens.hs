@@ -16,7 +16,7 @@ import Text.Hex qualified as H
 import Data.BULK.Core (encodeInt, toIntegral)
 import Data.BULK.Decode (VersionConstraint (SetVersion), getExpression, getStream, parseLazy, toNat)
 import Data.BULK.Encode (encode, encodeNat)
-import Data.BULK.TextNotation (parseTextNotation)
+import Data.BULK.TextNotation (parseNotation)
 import Data.BULK.Types (BULK (Form))
 import Data.Maybe (fromMaybe)
 
@@ -31,7 +31,7 @@ _Int :: (Integral a) => Prism' BULK a
 _Int = prism' encodeInt toIntegral
 
 _Bytes :: Prism' Text ByteString
-_Bytes = prism' undefined $ eitherToMaybe . parseTextNotation
+_Bytes = prism' undefined $ eitherToMaybe . parseNotation
 
 -- | This 'Prism' provides a 'Traversal' for tweaking the yield of a BULK stream encoding a single expression
 _BulkExpr :: Prism' ByteString BULK

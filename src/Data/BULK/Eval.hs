@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
@@ -11,19 +12,20 @@
 {-# LANGUAGE TypeAbstractions #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Data.BULK.Eval (eval) where
+module Data.BULK.Eval (eval, mkContext, evalExpr, execContext) where
 
 import Control.Category ((>>>))
-import Control.Lens (Prism', over, preview, set, view, (<|~))
+import Control.Lens (Prism', over, preview, set, view)
 import Control.Monad (join)
 import Data.Bifunctor (bimap, first)
 import Data.ByteString.Lazy (ByteString, toStrict)
 import Data.Either (fromRight)
-import Data.Foldable (traverse_)
+import Data.Foldable (foldl', traverse_)
 import Data.Functor (void)
 import Data.List (find)
 import Data.Map.Strict qualified as M
 import Data.Maybe (catMaybes, fromMaybe)
+import Data.Set qualified as S
 import Data.String.Interpolate (i)
 import Data.Text (Text)
 import Data.Text.Encoding (decodeUtf8')
@@ -31,7 +33,7 @@ import Data.Word (Word8)
 import GHC.Records (HasField)
 import Polysemy (Member, Members, Sem, run)
 import Polysemy.Error (Error, runError, throw)
-import Polysemy.State (State, evalState, execState, get, gets, modify)
+import Polysemy.State (State, evalState, execState, get, gets, modify, runState)
 
 import Data.BULK.Encode (encode, pattern Nat)
 import Data.BULK.Eval.Types
@@ -40,17 +42,23 @@ import Data.BULK.Types (BULK (..), CheckDigest, MatchID (..), Name (..), NameDef
 import Data.BULK.Types qualified as Core (LazyFunction (..))
 import Data.BULK.Types qualified as ND (NamespaceDefinition (..))
 
-eval :: [NamespaceDefinition] -> BULK -> Either String BULK
-eval nss bulk =
-    leftNothing "nothing yielded" $ runEval emptyScope $ do
-        initNSS
-        evalExpr bulk
+eval :: Context -> BULK -> Either String BULK
+eval (Context scope) bulk =
+    leftNothing "nothing yielded" $ runEval scope $ evalExpr bulk
   where
-    runEval scope = run . runError . evalState scope
-    initNSS = traverse_ applyNS $ coreNS : nss
+    runEval scope' = run . runError . evalState scope'
+
+mkContext :: [NamespaceDefinition] -> Context
+mkContext nss = fromRight emptyContext $ execContext $ traverse_ applyNS $ coreNS : nss
+
+emptyContext :: Context
+emptyContext = Context emptyScope
+
+execContext :: Sem '[State Scope, Error String] a -> Either String Context
+execContext = (Context <$>) . run . runError . execState emptyScope
 
 emptyScope :: Scope
-emptyScope = Scope{_associatedNamespaces = M.empty, _definitions = M.empty, _knownNamespaces = [], _knownPackages = [], _definingNamespace = Nothing}
+emptyScope = Scope{_associatedNamespaces = M.empty, _definitions = M.empty, _knownNamespaces = [], _lastingNamespaces = [], _knownPackages = [], _definingNamespace = Nothing}
 
 coreNS :: NamespaceDefinition
 coreNS =
@@ -70,15 +78,15 @@ coreNS =
 
 applyNS :: (Member (State Scope) r) => NamespaceDefinition -> Sem r ()
 applyNS ns = do
-    modify (over knownNamespaces (ns :))
-    traverse_ (\name -> modify (over definitions $ maybeInsert name)) ns.names
+    modify (over knownNamespaces $ S.insert ns)
+    modify (over definitions $ flip (foldl' maybeInsert) ns.names)
   where
-    maybeInsert :: NameDefinition -> M.Map Name Value -> M.Map Name Value
-    maybeInsert (DigestName{marker, checkDigest}) =
-        M.insert (Name (AssociatedNamespace ns) marker) $ Digest checkDigest
-    maybeInsert (LazyName{marker, lazyFunction}) =
-        M.insert (Name CoreNamespace marker) $ LazyFunction lazyFunction
-    maybeInsert (SelfEval{}) = id
+    maybeInsert :: M.Map Name Value -> NameDefinition -> M.Map Name Value
+    maybeInsert defs (DigestName{marker, checkDigest}) =
+        M.insert (Name (AssociatedNamespace ns) marker) (Digest checkDigest) defs
+    maybeInsert defs (LazyName{marker, lazyFunction}) =
+        M.insert (Name CoreNamespace marker) (LazyFunction lazyFunction) defs
+    maybeInsert defs (SelfEval{}) = defs
 
 evalExpr :: (Members [State Scope, Error String] r) => BULK -> Sem r (Maybe BULK)
 evalExpr Nil = yield Nil
@@ -124,7 +132,11 @@ evalForm content =
 evalAll :: (Members [State Scope, Error String] r) => [BULK] -> Sem r [BULK]
 evalAll exprs = do
     scope <- get
-    catMaybes <$> evalState scope (traverse evalExpr exprs)
+    (scope', result) <- runState scope (traverse evalExpr exprs)
+    void $ modify $ over knownNamespaces $ S.union scope'._lastingNamespaces
+    void $ modify $ over lastingNamespaces $ S.union scope'._lastingNamespaces
+    void $ modify $ over knownPackages $ S.union scope'._knownPackages
+    pure $ catMaybes result
 
 getLazyFunction :: Core.LazyFunction -> forall r. (Members [State Scope, Error TypeMismatch, Error String] r) => [BULK] -> Sem r (Maybe BULK)
 getLazyFunction Core.Version = coreVersion
@@ -181,15 +193,14 @@ evalExpr1 expr =
 addPackage :: (Members [State Scope, Error String] r) => MatchID -> [BULK] -> Sem r (Maybe BULK)
 addPackage match nss = do
     foundNSS <- traverse findNS nss
-    noYield $ modify (knownPackages <|~ Package{matchID = match, nsIDs = foundNSS})
+    noYield $ modify $ over knownPackages $ S.insert Package{matchID = match, nsIDs = foundNSS}
 
 verifyQualifiedPackage :: (Members [State Scope, Error String] r) => Name -> ByteString -> [BULK] -> Sem r (Maybe BULK)
 verifyQualifiedPackage digestName pkgDigest nss = do
-    digest <- retrieveDigest digestName
+    (qualifiedName, digest) <- retrieveDigest digestName
     let reencoded = encode $ Nil : nss
     case runCheckDigest digest pkgDigest reencoded of
         Right () -> do
-            qualifiedName <- qualifyName digestName
             addPackage (MatchQualifiedNamePrefix qualifiedName pkgDigest) nss
         Left err -> do
             throw [i|verification failed for package (#{err})|]
@@ -219,13 +230,13 @@ verifyBootstrappedNS identifier marker name idRest mnemonic toDigest = do
 
 verifyQualifiedNS :: (Members [State Scope, Error String] r) => Name -> ByteString -> Int -> BULK -> [BULK] -> [BULK] -> Sem r (Maybe BULK)
 verifyQualifiedNS digestName nsDigest marker mnemonic toDigest defs = do
-    digest <- retrieveDigest digestName
+    (qualifiedName, digest) <- retrieveDigest digestName
     let reencoded = encode toDigest
         mnemonicS = fromRight "" $ toText mnemonic
     case runCheckDigest digest nsDigest reencoded of
         Right () -> do
             scope <- get
-            let newNS = Just IncompleteNamespace{_namespaceDefinition = NamespaceDefinition{matchID = MatchNone, mnemonic = mnemonicS, names = []}, _nextName = 0, _pendingDefinitions = []}
+            let newNS = Just IncompleteNamespace{_namespaceDefinition = NamespaceDefinition{matchID = MatchQualifiedNamePrefix qualifiedName nsDigest, mnemonic = mnemonicS, names = []}, _nextName = 0, _pendingDefinitions = []}
                 localScope = scope{_definingNamespace = newNS}
             mayNS <- (view definingNamespace <$>) . execState localScope $ traverse evalExpr defs
             case mayNS of
@@ -233,16 +244,17 @@ verifyQualifiedNS digestName nsDigest marker mnemonic toDigest defs = do
                     let definedNS = incompleteNS._namespaceDefinition
                         completeDefinitions = map (bimap (Name (AssociatedNamespace definedNS)) Expression) incompleteNS._pendingDefinitions
                     traverse_ (\(name, value) -> modify $ over definitions $ M.insert name value) completeDefinitions
-                    void $ modify (over knownNamespaces (definedNS :))
+                    void $ modify $ over knownNamespaces $ S.insert definedNS
+                    void $ modify $ over lastingNamespaces $ S.insert definedNS
                     noYield $ modify (over associatedNamespaces (M.insert marker definedNS))
                 Nothing ->
                     throw [i|definitions lost for namespace: #{mnemonicS}|]
         Left err -> do
             throw [i|verification failed for namespace: #{mnemonicS} (#{err})|]
 
-retrieveDigest :: (Members [State Scope, Error String] r) => Name -> Sem r CheckDigest
+retrieveDigest :: (Members [State Scope, Error String] r) => Name -> Sem r (Name, CheckDigest)
 retrieveDigest name =
-    retrieveDefinition _Digest name >>= maybe (throw [i|unknown digest: #{name}|]) pure . snd
+    retrieveDefinition _Digest name >>= maybe (throw [i|unknown digest: #{name}|]) pure . sequenceA
 
 matchOn :: (HasField "matchID" r MatchID) => BULK -> r -> Bool
 matchOn expr thing = runMatchID thing.matchID expr
