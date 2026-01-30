@@ -144,7 +144,7 @@ coreAssociateNS [Nat marker, expr] =
 coreAssociateNS _ = throw TypeMismatch
 corePackage (identifier@(Array _) : nss) =
     addPackage (MatchEq identifier) nss
-corePackage (Form [Reference digestName, Array pkgDigest] : nss) =
+corePackage (Form [Reference digestName, Array pkgDigest] : Nil : nss) =
     verifyQualifiedPackage digestName pkgDigest nss
 corePackage _ = throw TypeMismatch
 coreImport [Nat base, Nat count, expr] = do
@@ -186,7 +186,7 @@ addPackage match nss = do
 verifyQualifiedPackage :: (Members [State Scope, Error String] r) => Name -> ByteString -> [BULK] -> Sem r (Maybe BULK)
 verifyQualifiedPackage digestName pkgDigest nss = do
     digest <- retrieveDigest digestName
-    let reencoded = encode nss
+    let reencoded = encode $ Nil : nss
     case runCheckDigest digest pkgDigest reencoded of
         Right () -> do
             qualifiedName <- qualifyName digestName

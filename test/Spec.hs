@@ -160,7 +160,7 @@ spec = describe "BULK" $ do
                 decodeNotationFile @[()] [hash0] "test/bootstrap-bad.bulktext" `shouldReturn` Left "unable to bootstrap namespace: bootstrap"
                 decodeNotationFile @[()] [hash0] "config/hash0.bulktext" `shouldReturn` Right []
             it "has verifiable packages" $ do
-                decodeNotationFile @[()] [hash0] "test/package-bad.bulktext" `shouldReturn` Left "verification failed for package (expected digest 00000000000000000000000000000000 but got a67d83372222b4bd8da851daa24e034b6a3ef3a50b69931b61966aa36a33ff1a)"
+                decodeNotationFile @[()] [hash0] "test/package-bad.bulktext" `shouldReturn` Left "verification failed for package (expected digest 00000000000000000000000000000000 but got 7a6dcf4b2cf07e63b60b893c6ac193b55ce38857e18148afc5b113189324747c)"
 
         --
         -- Parser monad
@@ -174,7 +174,7 @@ spec = describe "BULK" $ do
                 decodeFile [hash0, foo] "test/foos.bulk" `shouldReturn` Right [Foo True True 1, Foo True False 1, Foo False True 2, Foo False False 3, Foo True True 5, Foo False False 8]
                 decodeNotationFile [hash0, foo] "test/foos.bulktext" `shouldReturn` Right [Foo True True 1, Foo True False 1, Foo False True 2, Foo False False 3, Foo True True 5, Foo False False 8]
                 decodeNotation [hash0, foo, bar] "( version 1 0 ) ( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( ns 21 ( hash0:shake128 #[4] 0x117A63BB ) )  ( ns 22 ( hash0:shake128 #[4] 0x6744BA37 ) ) ( 0x16-00 1 ( 0x15-00 false true 42 ) )" `shouldBe` Right [Bar 1 (Foo False True 42)]
-                decodeNotation [hash0, foo, bar] "( version 1 0 ) ( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( package ( hash0:shake128 #[4] 0xD4912423 ) ( hash0:shake128 #[4] 0x117A63BB ) ( hash0:shake128 #[4] 0x6744BA37 ) ) ( import 21 2 ( hash0:shake128 #[4] 0xD4912423 ) ) ( 0x16-00 1 ( 0x15-00 false true 42 ) )" `shouldBe` Right [Bar 1 (Foo False True 42)]
+                decodeNotation [hash0, foo, bar] "( version 1 0 ) ( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( package ( hash0:shake128 #[4] 0x70E49F22 ) nil ( hash0:shake128 #[4] 0x117A63BB ) ( hash0:shake128 #[4] 0x6744BA37 ) ) ( import 21 2 ( hash0:shake128 #[4] 0x70E49F22 ) ) ( 0x16-00 1 ( 0x15-00 false true 42 ) )" `shouldBe` Right [Bar 1 (Foo False True 42)]
 
         --
         -- Custom encoders
