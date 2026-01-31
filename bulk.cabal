@@ -83,6 +83,7 @@ executable bulk-cli
     , bytestring
     , digits
     , filepath
+    , hex-text
     , lens
     , optparse-simple
     , polysemy
@@ -114,6 +115,7 @@ test-suite bulk-test
     , bulk
     , bytestring
     , digits
+    , hex-text
     , hspec
     , lens
     , polysemy

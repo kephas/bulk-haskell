@@ -23,6 +23,7 @@ dependencies:
 - bits
 - bytestring
 - digits
+- hex-text
 - lens
 - polysemy
 - polysemy-plugin
@@ -51,7 +52,6 @@ library:
     - memory
     - mtl
     - parser-combinators
-    - hex-text
 
 executables:
   bulk-cli:
