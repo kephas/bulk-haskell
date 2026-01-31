@@ -49,6 +49,11 @@ data NameDefinition
         , mnemonic :: Text
         , checkDigest :: CheckDigest
         }
+    | ExpressionName
+        { marker :: Word8
+        , mnemonic :: Text
+        , expression :: BULK
+        }
     | LazyName
         { marker :: Word8
         , mnemonic :: Text

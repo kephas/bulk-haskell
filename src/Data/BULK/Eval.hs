@@ -17,7 +17,7 @@ module Data.BULK.Eval (eval, mkContext, evalExpr, execContext) where
 import Control.Category ((>>>))
 import Control.Lens (Prism', over, preview, set, view)
 import Control.Monad (join)
-import Data.Bifunctor (bimap, first)
+import Data.Bifunctor (first)
 import Data.ByteString.Lazy (ByteString, toStrict)
 import Data.Either (fromRight)
 import Data.Foldable (foldl', traverse_)
@@ -44,9 +44,10 @@ import Data.BULK.Types qualified as ND (NamespaceDefinition (..))
 
 eval :: Context -> BULK -> Either String BULK
 eval (Context scope) bulk =
-    leftNothing "nothing yielded" $ runEval scope $ evalExpr bulk
+    leftNothing "nothing yielded" $ runEval scope $ initNSS >> evalExpr bulk
   where
     runEval scope' = run . runError . evalState scope'
+    initNSS = traverse_ applyNS scope._knownNamespaces
 
 mkContext :: [NamespaceDefinition] -> Context
 mkContext nss = fromRight emptyContext $ execContext $ traverse_ applyNS $ coreNS : nss
@@ -84,6 +85,8 @@ applyNS ns = do
     maybeInsert :: M.Map Name Value -> NameDefinition -> M.Map Name Value
     maybeInsert defs (DigestName{marker, checkDigest}) =
         M.insert (Name (AssociatedNamespace ns) marker) (Digest checkDigest) defs
+    maybeInsert defs (ExpressionName{marker, expression}) =
+        M.insert (Name (AssociatedNamespace ns) marker) (Expression expression) defs
     maybeInsert defs (LazyName{marker, lazyFunction}) =
         M.insert (Name CoreNamespace marker) (LazyFunction lazyFunction) defs
     maybeInsert defs (SelfEval{}) = defs
@@ -211,9 +214,8 @@ defineImplicit mnemonic value = do
     nsDef <- gets (view definingNamespace)
     case nsDef of
         Just incompleteNS -> do
-            let newName = SelfEval{marker = incompleteNS._nextName, mnemonic = mnemonicS}
-                newDef = (incompleteNS._nextName, value)
-            noYield $ modify (set definingNamespace $ Just $ over namespaceDefinition (addName newName) $ over nextName (+ 1) $ over pendingDefinitions (newDef :) incompleteNS)
+            let newName = ExpressionName{marker = incompleteNS._nextName, mnemonic = mnemonicS, expression = value}
+            noYield $ modify (set definingNamespace $ Just $ over namespaceDefinition (addName newName) $ over nextName (+ 1) incompleteNS)
         Nothing ->
             throw [i|nil marker outside of namespace definition for name: #{mnemonicS}|]
 
@@ -236,14 +238,13 @@ verifyQualifiedNS digestName nsDigest marker mnemonic toDigest defs = do
     case runCheckDigest digest nsDigest reencoded of
         Right () -> do
             scope <- get
-            let newNS = Just IncompleteNamespace{_namespaceDefinition = NamespaceDefinition{matchID = MatchQualifiedNamePrefix qualifiedName nsDigest, mnemonic = mnemonicS, names = []}, _nextName = 0, _pendingDefinitions = []}
+            let newNS = Just IncompleteNamespace{_namespaceDefinition = NamespaceDefinition{matchID = MatchQualifiedNamePrefix qualifiedName nsDigest, mnemonic = mnemonicS, names = []}, _nextName = 0}
                 localScope = scope{_definingNamespace = newNS}
             mayNS <- (view definingNamespace <$>) . execState localScope $ traverse evalExpr defs
             case mayNS of
                 Just incompleteNS -> do
                     let definedNS = incompleteNS._namespaceDefinition
-                        completeDefinitions = map (bimap (Name (AssociatedNamespace definedNS)) Expression) incompleteNS._pendingDefinitions
-                    traverse_ (\(name, value) -> modify $ over definitions $ M.insert name value) completeDefinitions
+                    applyNS definedNS
                     void $ modify $ over knownNamespaces $ S.insert definedNS
                     void $ modify $ over lastingNamespaces $ S.insert definedNS
                     noYield $ modify (over associatedNamespaces (M.insert marker definedNS))

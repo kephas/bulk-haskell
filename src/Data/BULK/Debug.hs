@@ -7,6 +7,7 @@ module Data.BULK.Debug (Debug (..), module Debug.Trace) where
 
 import Data.BULK.Eval.Types
 import Data.BULK.Types
+import Data.Bifunctor (bimap)
 import Data.ByteString.Lazy (ByteString)
 import Data.Map qualified as M
 import Data.Set qualified as S
@@ -56,11 +57,24 @@ instance (Debug a) => Debug (Maybe a) where
     debug Nothing = "<>"
     debug (Just x) = [i|<#{debug x}>|]
 
-instance (Show k, Debug v) => Debug (M.Map k v) where
-    debug = show . map (debug <$>) . M.toList
+instance (Debug a, Debug b) => Debug (a, b) where
+    debug (a, b) = [i|(#{debug a}, #{debug b})|]
+
+instance (Debug k, Debug v) => Debug (M.Map k v) where
+    debug = show . map (bimap debug debug) . M.toList
+
+instance Debug Int
 
 instance (Debug v) => Debug (S.Set v) where
     debug = show . map debug . S.toList
 
 instance Debug Scope where
-    debug Scope{..} = [i|ANSS: #{debug _associatedNamespaces}, KNSS: #{debug _knownNamespaces}, LNSS: #{debug _lastingNamespaces}, KPKG: #{debug _knownPackages}|]
+    debug Scope{..} = [i|ANSS: #{debug _associatedNamespaces}, KNSS: #{debug _knownNamespaces}, LNSS: #{debug _lastingNamespaces}, KPKG: #{debug _knownPackages}, DefNS: #{debug _definingNamespace}|]
+
+instance Debug IncompleteNamespace where
+    debug IncompleteNamespace{..} = [i|{@#{_nextName} + #{debug _namespaceDefinition}|]
+
+instance Debug Value where
+    debug (Expression bulk) = [i|=#{debug bulk}|]
+    debug (Digest digest) = [i|=#{digest}|]
+    debug (LazyFunction f) = [i|=#{f}()|]

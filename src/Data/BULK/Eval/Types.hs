@@ -13,7 +13,7 @@ import Data.Word (Word8)
 import Data.BULK.Types (BULK (..), CheckDigest, Name, NamespaceDefinition (..), Package (..))
 import Data.BULK.Types qualified as Core (LazyFunction (..))
 
-newtype Context = Context Scope deriving (Show)
+newtype Context = Context {scope :: Scope} deriving (Show)
 
 data Scope = Scope
     { _associatedNamespaces :: M.Map Int NamespaceDefinition
@@ -50,7 +50,6 @@ _LazyFunction = prism' LazyFunction extract
 data IncompleteNamespace = IncompleteNamespace
     { _namespaceDefinition :: NamespaceDefinition
     , _nextName :: Word8
-    , _pendingDefinitions :: [(Word8, BULK)]
     }
     deriving (Show)
 

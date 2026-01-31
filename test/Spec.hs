@@ -133,6 +133,9 @@ spec = describe "BULK" $ do
             it "parses unknown references" $ do
                 "foo:bar quux:one foo:baz" `shouldDenote` (uncurry IntReference <$> [(0x14, 0), (0x15, 0), (0x14, 1)])
                 "123:one" `shouldDenote` [IntReference 0x14 0]
+            it "uses known mnemonics" $ do
+                ctx <- loadNotationFiles ctx0 ["test/123.bulktext"]
+                decodeNotationFile @[Int] ctx "test/321.bulktext" `shouldReturn` Right [1]
         --
         -- Core namespace and evaluation
         describe "core namespace" $ do
@@ -176,7 +179,7 @@ spec = describe "BULK" $ do
                 ctx <- loadNotationFiles ctx0 ["test/config/foo.bulktext", "test/config/bar.bulktext", "test/config/foobar.bulktext"]
                 decodeNotation ctx "( version 1 0 ) ( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( ns 21 ( hash0:shake128 #[4] 0x117A63BB ) ) ( foo:foo false true 42 )" `shouldBe` Right [Foo False True 42]
                 decodeNotation @[Foo] ctx "( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( ns 21 ( hash0:shake128 #[4] 0x117A63BB ) ) ( foo:foo false true 42 )" `shouldBe` Left "missing version"
-                decodeNotation @[Foo] ctx "( version 1 0 ) ( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( ns 21 ( hash0:shake128 #[4] 0x117A63BB ) ) ( foo:foo false true nil )" `shouldBe` Left "cannot parse as integer: Nil"
+                decodeNotation @[Foo] ctx "( version 1 0 ) ( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( ns 21 ( hash0:shake128 #[4] 0x117A63BB ) ) ( foo:foo false true nil )" `shouldBe` Left "cannot parse as integer: nil"
                 decodeNotation @[Foo] ctx "( version 1 0 ) ( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( ns 21 ( hash0:shake128 #[4] 0x117A63BB ) ) ( foo:foo false true )" `shouldBe` Left "no next BULK expression"
                 decodeFile ctx "test/foo.bulk" `shouldReturn` Right [Foo False True 42]
                 decodeFile ctx "test/foos.bulk" `shouldReturn` Right [Foo True True 1, Foo True False 1, Foo False True 2, Foo False False 3, Foo True True 5, Foo False False 8]

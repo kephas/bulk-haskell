@@ -1,0 +1,4 @@
+( version 1 0 )
+( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) )
+( ns 21 ( hash0:shake128 #[4] 0xDD3BFF16 ) )
+123:one

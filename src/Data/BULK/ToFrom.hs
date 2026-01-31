@@ -106,7 +106,7 @@ list = do
             traverse parseBULK xs
 
 notExpected :: (MonadFail m) => String -> BULK -> m a
-notExpected expected value = fail [i|cannot parse as #{expected}: #{value}|]
+notExpected expected value = fail [i|cannot parse as #{expected}: #{debug value}|]
 
 instance FromBULK () where
     parseBULK Nil = pure ()
