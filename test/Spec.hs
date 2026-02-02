@@ -162,6 +162,7 @@ spec = describe "BULK" $ do
                         encodeInt value `shouldBe` Form [Core kind, Array bytes]
             it "has verifiable namespaces" $ do
                 decodeNotationFile @[()] ctx0 "test/123-bad.bulktext" `shouldReturn` Left "verification failed for namespace: 123 (expected digest 00000000000000000000000000000000 but got dd3bff1608fa25cc16ba90c0f8b4976e4a50b1d215cf8448e890e7cc4a4b0ff0)"
+                decodeNotationFile @[()] ctx0 "test/123-pre.bulktext" `shouldReturn` Left "verification failed for namespace: 123 (missing digest f8597e4ccb42898c22c4f0eb0f11e73374020b312369547f4e85009d1ff152ca)"
                 decodeNotationFile @[Int] ctx0 "test/123.bulktext" `shouldReturn` Right [1, 2, 3]
             it "can bootstrap hashing" $ do
                 decodeNotationFile @[()] ctx0 "test/bootstrap-bad.bulktext" `shouldReturn` Left "unable to bootstrap namespace: bootstrap"

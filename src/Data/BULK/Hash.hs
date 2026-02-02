@@ -6,10 +6,10 @@ module Data.BULK.Hash where
 
 import Crypto.Hash (SHAKE128 (..), hashWith)
 import Data.ByteArray (ByteArrayAccess, eq, length, takeView)
-import Data.ByteString (ByteString, toStrict)
+import Data.ByteString (ByteString, null, toStrict)
 import Data.ByteString.Lazy (LazyByteString)
 import Data.String.Interpolate (i)
-import Prelude hiding (length)
+import Prelude hiding (length, null)
 
 import Data.BULK.Types (CheckDigest (..))
 
@@ -21,11 +21,10 @@ runCheckDigest CheckShake128 ref content = shake128Digest (mkDigest ref) (mkCont
 
 shake128Digest :: Digest -> Content -> Either String ()
 shake128Digest (Digest referenceDigest) (Content content) =
-    if referenceDigest `isPrefixOf` contentDigest
-        then
-            Right ()
-        else
-            Left [i|expected digest #{referenceDigest} but got #{contentDigest}|]
+    case (null referenceDigest, referenceDigest `isPrefixOf` contentDigest) of
+        (True, _) -> Left [i|missing digest #{contentDigest}|]
+        (False, True) -> Right ()
+        (False, False) -> Left [i|expected digest #{referenceDigest} but got #{contentDigest}|]
   where
     contentDigest = hashWith (SHAKE128 :: SHAKE128 256) content
 
