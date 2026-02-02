@@ -28,5 +28,5 @@ untextify :: FilePath -> IO ()
 untextify file = do
     let target' = file -<.> "bulk"
         target = if file == target' then file <.> "bulk" else target'
-    text <- decodeUtf8With lenientDecode <$> readFileBS file
-    either putStrLn (writeFileLBS target) $ parseTextNotation text
+    text <- readTextFile file
+    either putStrLn (writeFileLBS target) $ parseNotation text
