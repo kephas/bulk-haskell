@@ -36,6 +36,7 @@ import Data.BULK.Eval (eval, evalExpr, execContext, mkContext, toText)
 import Data.BULK.Eval.Types (Context (Context))
 import Data.BULK.TextNotation (parseNotation, parseNotationFile)
 import Data.BULK.Types (BULK (..), MatchBULK (..), Name (..), NameDefinition (..), Namespace (AssociatedNamespace), NamespaceDefinition (..), pattern Core)
+import Data.ByteString (StrictByteString, toStrict)
 
 class FromBULK a where
     parseBULK :: BULK -> Parser a
@@ -136,6 +137,10 @@ instance FromBULK Bool where
 instance FromBULK Int where
     parseBULK (Nat n) = pure n
     parseBULK bulk = notExpected "integer" bulk
+
+instance FromBULK StrictByteString where
+    parseBULK (Array lbs) = pure $ toStrict lbs
+    parseBULK bulk = notExpected "array" bulk
 
 instance FromBULK BULK where
     parseBULK = pure

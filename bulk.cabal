@@ -26,6 +26,7 @@ source-repository head
 library
   exposed-modules:
       Data.BULK
+      Data.BULK.BARK
       Data.BULK.Core
       Data.BULK.Debug
       Data.BULK.Decode

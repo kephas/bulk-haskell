@@ -23,6 +23,7 @@ import Witch (from, via)
 import Prelude hiding (readFile)
 
 import Data.BULK
+import Data.BULK.BARK qualified as BARK
 import Data.BULK.Encode (pattern IntReference)
 import Data.BULK.Eval (mkContext)
 import Data.BULK.Types (pattern Core)
@@ -198,6 +199,13 @@ spec = describe "BULK" $ do
                 matchTo @ByteString [("", Array ""), ("\0\1\2", Array "\0\1\2")]
             it "encodes UTF-8 strings" $ do
                 matchTo @Text [("foo", Array "foo"), ("γράφω", Array $ fromHex "CEB3CF81CEACCF86CF89")]
+
+        --
+        -- BARK
+        describe "BARK" $ do
+            it "reads a manifest" $ do
+                ctx <- loadNotationFiles ctx0 ["test/config/bark-alpha.bulktext"]
+                decodeNotationFile ctx "test/manifest.bulktext" `shouldReturn` Right [BARK.Description "foo" "0000"]
 
     describe "slow tests" $ do
         prop "reads really big generic arrays" $ test_bigger_arrays_decoding 3
