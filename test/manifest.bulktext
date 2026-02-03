@@ -1,0 +1,7 @@
+( version 1 0 )
+( ns 20 ( hash0:shake128 #[32] 0xE2ECDA494A78195B07034AB10B2C4390C94C01251B13D1A483D21E8B781D703D ) )
+( ns 21 ( hash0:shake128 #[32] 0x0066F0235D80F6EA9336AD97A656A0A96289FAA130C82FE1D0E74CB30B702EB1 ) )
+( bark:description
+ ( bark:metadata
+  ( bark:about ( bark:path "foo" ) )
+  ( bark:hash #[4] 0x30303030 ) ) )
