@@ -5,6 +5,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MonoLocalBinds #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE QuasiQuotes #-}
@@ -133,12 +134,12 @@ runParser :: Parser a -> Either String a
 runParser = run . evalState Nothing . runFail
 
 nsName :: NamespaceDefinition -> Text -> MatchBULK
-nsName ns1@(NamespaceDefinition{..}) mnemonic1 =
+nsName ns1@(NamespaceDefinition{mnemonic}) mnemonic1 =
     MatchBULK{..}
   where
-    match = maybe (const False) matchDef $ find (\name -> name.mnemonic == mnemonic1) names
-    matchDef def (Reference (Name (AssociatedNamespace ns2@(NamespaceDefinition{})) name)) = ns1.matchID == ns2.matchID && name == def.marker
-    matchDef _ _ = False
+    findName ns = (.marker) <$> find (\nameDef -> nameDef.mnemonic == mnemonic1) ns.names
+    match (Reference (Name (AssociatedNamespace ns2@(NamespaceDefinition{})) name)) = ns1.matchID == ns2.matchID && Just name == findName ns2
+    match _bulk = False
     expected = [i|#{mnemonic}:#{mnemonic1}|]
 
 instance ToBULK Bool where

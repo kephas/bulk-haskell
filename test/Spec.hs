@@ -171,7 +171,7 @@ spec = describe "BULK" $ do
                 decodeNotationFile @[()] ctx0 "test/package-bad.bulktext" `shouldReturn` Left "verification failed for package (expected digest 00000000000000000000000000000000 but got 7a6dcf4b2cf07e63b60b893c6ac193b55ce38857e18148afc5b113189324747c)"
             it "has lasting namespaces and packages" $ do
                 ctx <- loadNotationFiles ctx0 ["test/config/foo.bulktext", "test/config/bar.bulktext", "test/config/foobar.bulktext"]
-                decodeNotation ctx "( version 1 0 ) ( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( import 21 2 ( hash0:shake128 #[4] 0x7A6DCF4B ) ) ( 0x16-00 1 ( 0x15-00 false true 42 ) )" `shouldBe` Right [Bar 1 (Foo False True 42)]
+                decodeNotation ctx "( version 1 0 ) ( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( import 21 2 ( hash0:shake128 #[4] 0x60F24D7E ) ) ( 0x16-00 1 ( 0x15-00 false true 42 ) )" `shouldBe` Right [Bar 1 (Foo False True 42)]
 
         --
         -- Parser monad
@@ -185,8 +185,8 @@ spec = describe "BULK" $ do
                 decodeFile ctx "test/foo.bulk" `shouldReturn` Right [Foo False True 42]
                 decodeFile ctx "test/foos.bulk" `shouldReturn` Right [Foo True True 1, Foo True False 1, Foo False True 2, Foo False False 3, Foo True True 5, Foo False False 8]
                 decodeNotationFile ctx "test/foos.bulktext" `shouldReturn` Right [Foo True True 1, Foo True False 1, Foo False True 2, Foo False False 3, Foo True True 5, Foo False False 8]
-                decodeNotation ctx "( version 1 0 ) ( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( ns 21 ( hash0:shake128 #[4] 0x117A63BB ) )  ( ns 22 ( hash0:shake128 #[4] 0x6744BA37 ) ) ( 0x16-00 1 ( foo:foo false true 42 ) )" `shouldBe` Right [Bar 1 (Foo False True 42)]
-                decodeNotation ctx "( version 1 0 ) ( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( package ( hash0:shake128 #[4] 0x70E49F22 ) nil ( hash0:shake128 #[4] 0x117A63BB ) ( hash0:shake128 #[4] 0x6744BA37 ) ) ( import 21 2 ( hash0:shake128 #[4] 0x70E49F22 ) ) ( 0x16-00 1 ( foo:foo false true 42 ) )" `shouldBe` Right [Bar 1 (Foo False True 42)]
+                decodeNotation ctx "( version 1 0 ) ( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( ns 21 ( hash0:shake128 #[4] 0x117A63BB ) )  ( ns 22 ( hash0:shake128 #[4] 0x7F28DB08 ) ) ( 0x16-00 1 ( foo:foo false true 42 ) )" `shouldBe` Right [Bar 1 (Foo False True 42)]
+                decodeNotation ctx "( version 1 0 ) ( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( package ( hash0:shake128 #[4] 0x98FB6648 ) nil ( hash0:shake128 #[4] 0x117A63BB ) ( hash0:shake128 #[4] 0x7F28DB08 ) ) ( import 21 2 ( hash0:shake128 #[4] 0x98FB6648 ) ) ( 0x16-00 1 ( foo:foo false true 42 ) )" `shouldBe` Right [Bar 1 (Foo False True 42)]
 
         --
         -- Custom encoders
@@ -276,19 +276,15 @@ foo =
     NamespaceDefinition
         { matchID = MatchQualifiedNamePrefix (Name (AssociatedNamespace hash0) 0x00) $ fromHex "117A63BBF04F4A573C6D29E0D0324F6046EFF314B9BCD965872A0455978CA21B"
         , mnemonic = "foo"
-        , names =
-            [ SelfEval{marker = 0x00, mnemonic = "foo"}
-            ]
+        , names = []
         }
 
 bar :: NamespaceDefinition
 bar =
     NamespaceDefinition
-        { matchID = MatchQualifiedNamePrefix (Name (AssociatedNamespace hash0) 0x00) $ fromHex "6744BA37148D745EE0B25717A012D1E2727649C2BD285198A59A2DEE50657391"
+        { matchID = MatchQualifiedNamePrefix (Name (AssociatedNamespace hash0) 0x00) $ fromHex "7F28DB08DE2CAA8D3D88309A40484C5EFB05CC2E2B8F5C14602692FFDE7D2CB6"
         , mnemonic = "bar"
-        , names =
-            [ SelfEval{marker = 0x00, mnemonic = "bar"}
-            ]
+        , names = []
         }
 
 data Foo = Foo Bool Bool Int deriving (Eq, Show)

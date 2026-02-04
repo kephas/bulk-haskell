@@ -171,7 +171,9 @@ coreDefine [Reference name, expr] =
     noYield $ modify (over definitions (M.insert name $ Expression expr))
 coreDefine _ = throw TypeMismatch
 coreDefineMnemonic [Nil, mnemonic, _doc, value] =
-    defineImplicit mnemonic value
+    defineImplicit mnemonic $ Just value
+coreDefineMnemonic [Nil, mnemonic, _doc] =
+    defineImplicit mnemonic Nothing
 coreDefineMnemonic _ = throw TypeMismatch
 coreVerifyNS (identifier@(Form (Reference (Name (UnassociatedNamespace marker) name) : idRest)) : toDigest@(Nat marker' : Nil : mnemonic : _))
     | marker == marker' =
@@ -208,13 +210,18 @@ verifyQualifiedPackage digestName pkgDigest nss = do
         Left err -> do
             throw [i|verification failed for package (#{err})|]
 
-defineImplicit :: (Members [State Scope, Error String] r) => BULK -> BULK -> Sem r (Maybe BULK)
-defineImplicit mnemonic value = do
+defineImplicit :: (Members [State Scope, Error String] r) => BULK -> Maybe BULK -> Sem r (Maybe BULK)
+defineImplicit mnemonic maybeValue = do
     let mnemonicS = fromRight "" $ toText mnemonic
     nsDef <- gets (view definingNamespace)
     case nsDef of
         Just incompleteNS -> do
-            let newName = ExpressionName{marker = incompleteNS._nextName, mnemonic = mnemonicS, expression = value}
+            newName <- case maybeValue of
+                Just value -> do
+                    qualifiedValue <- evalExpr1 value
+                    pure $ ExpressionName{marker = incompleteNS._nextName, mnemonic = mnemonicS, expression = qualifiedValue}
+                Nothing ->
+                    pure $ SelfEval{marker = incompleteNS._nextName, mnemonic = mnemonicS}
             noYield $ modify (set definingNamespace $ Just $ over namespaceDefinition (addName newName) $ over nextName (+ 1) incompleteNS)
         Nothing ->
             throw [i|nil marker outside of namespace definition for name: #{mnemonicS}|]
