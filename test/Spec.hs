@@ -11,7 +11,9 @@ import Data.ByteString.Lazy (ByteString, fromStrict, pack, singleton)
 import Data.Foldable (for_, traverse_)
 import Data.Function (on)
 import Data.List (nubBy)
+import Data.Maybe (fromJust)
 import Data.String.Interpolate (i)
+import Data.Text (Text)
 import Data.Word (Word8)
 import Test.Hspec
 import Test.Hspec.QuickCheck (prop)
@@ -24,8 +26,6 @@ import Data.BULK
 import Data.BULK.Encode (pattern IntReference)
 import Data.BULK.Eval (mkContext)
 import Data.BULK.Types (pattern Core)
-import Data.Maybe (fromJust)
-import Data.Text (Text)
 import Test.BULK.Decode
 import Test.QuickCheck.Instances.BULK (simpleBULK)
 
@@ -171,7 +171,7 @@ spec = describe "BULK" $ do
                 decodeNotationFile @[()] ctx0 "test/package-bad.bulktext" `shouldReturn` Left "verification failed for package (expected digest 00000000000000000000000000000000 but got 7a6dcf4b2cf07e63b60b893c6ac193b55ce38857e18148afc5b113189324747c)"
             it "has lasting namespaces and packages" $ do
                 ctx <- loadNotationFiles ctx0 ["test/config/foo.bulktext", "test/config/bar.bulktext", "test/config/foobar.bulktext"]
-                decodeNotation ctx "( version 1 0 ) ( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( import 21 2 ( hash0:shake128 #[4] 0x936AFC0C ) ) ( bar:bar 1 ( foo:foo false true 42 ) )" `shouldBe` Right [Bar 1 (Foo False True 42)]
+                decodeNotation ctx "( version 1 0 ) ( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( import 21 2 ( hash0:shake128 #[4] 0x936AFC0C ) ) ( bar:bar ( bar:int 1 ) ( bar:foo ( foo:foo false true 42 ) ) )" `shouldBe` Right [Bar 1 (Foo False True 42)]
 
         --
         -- Parser monad
@@ -185,8 +185,8 @@ spec = describe "BULK" $ do
                 decodeFile ctx "test/foo.bulk" `shouldReturn` Right [Foo False True 42]
                 decodeFile ctx "test/foos.bulk" `shouldReturn` Right [Foo True True 1, Foo True False 1, Foo False True 2, Foo False False 3, Foo True True 5, Foo False False 8]
                 decodeNotationFile ctx "test/foos.bulktext" `shouldReturn` Right [Foo True True 1, Foo True False 1, Foo False True 2, Foo False False 3, Foo True True 5, Foo False False 8]
-                decodeNotation ctx "( version 1 0 ) ( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( ns 21 ( hash0:shake128 #[4] 0x7F28DB08 ) )  ( ns 22 ( hash0:shake128 #[4] 0x117A63BB ) ) ( bar:bar 1 ( foo:foo false true 42 ) )" `shouldBe` Right [Bar 1 (Foo False True 42)]
-                decodeNotation ctx "( version 1 0 ) ( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( package ( hash0:shake128 #[4] 0xDBE86354 ) nil ( hash0:shake128 #[4] 0x7F28DB08 ) ( hash0:shake128 #[4] 0x117A63BB ) ) ( import 21 2 ( hash0:shake128 #[4] 0xDBE86354 ) ) ( bar:bar 1 ( foo:foo false true 42 ) )" `shouldBe` Right [Bar 1 (Foo False True 42)]
+                decodeNotation ctx "( version 1 0 ) ( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( ns 21 ( hash0:shake128 #[4] 0x7F28DB08 ) )  ( ns 22 ( hash0:shake128 #[4] 0x117A63BB ) ) ( bar:bar ( bar:int 1 ) ( bar:foo ( foo:foo false true 42 ) ) )" `shouldBe` Right [Bar 1 (Foo False True 42)]
+                decodeNotation ctx "( version 1 0 ) ( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( package ( hash0:shake128 #[4] 0xDBE86354 ) nil ( hash0:shake128 #[4] 0x7F28DB08 ) ( hash0:shake128 #[4] 0x117A63BB ) ) ( import 21 2 ( hash0:shake128 #[4] 0xDBE86354 ) ) ( bar:bar ( bar:int 1 ) ( bar:foo ( foo:foo false true 42 ) ) )" `shouldBe` Right [Bar 1 (Foo False True 42)]
 
         --
         -- Custom encoders
@@ -290,14 +290,14 @@ bar =
 data Foo = Foo Bool Bool Int deriving (Eq, Show)
 
 instance FromBULK Foo where
-    parseBULK = withForm (nsName foo "foo") do
+    parseBULK = foo <*:> "foo" $ do
         Foo <$> nextBULK <*> nextBULK <*> nextBULK
 
 data Bar = Bar Int Foo deriving (Eq, Show)
 
 instance FromBULK Bar where
-    parseBULK = withForm (nsName bar "bar") do
-        Bar <$> nextBULK <*> nextBULK
+    parseBULK = bar <*:> "bar" $ do
+        Bar <$> (bar <:> "int") nextBULK <*> (bar <:> "foo") nextBULK
 
 eval' :: [NamespaceDefinition] -> BULK -> Either String BULK
 eval' nss = eval (mkContext nss)

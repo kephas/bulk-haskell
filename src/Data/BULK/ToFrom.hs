@@ -19,12 +19,12 @@ import Data.ByteString.Lazy (ByteString)
 import Data.ByteString.Lazy qualified as B
 import Data.List (find)
 import Data.String.Interpolate (i)
-import Data.Text (Text)
+import Data.Text (Text, unpack)
 import Data.Text.Encoding (encodeUtf8)
 import Data.Text.Encoding.Error (OnDecodeError, lenientDecode)
 import Data.Text.Lazy qualified as LT
 import Data.Text.Lazy.Encoding qualified as LTE
-import Polysemy (Sem, run)
+import Polysemy (Sem, raise, run)
 import Polysemy.Fail (Fail, runFail)
 import Polysemy.State (State, evalState, get, put)
 
@@ -32,7 +32,7 @@ import Data.BULK.Core (encodeInt)
 import Data.BULK.Debug (debug)
 import Data.BULK.Decode (VersionConstraint (ReadVersion), getStream, parseLazy)
 import Data.BULK.Encode (encodeNat, pattern Nat)
-import Data.BULK.Eval (eval, evalExpr, execContext, mkContext)
+import Data.BULK.Eval (eval, evalExpr, execContext, mkContext, toText)
 import Data.BULK.Eval.Types (Context (Context))
 import Data.BULK.TextNotation (parseNotation, parseNotationFile)
 import Data.BULK.Types (BULK (..), MatchBULK (..), Name (..), NameDefinition (..), Namespace (AssociatedNamespace), NamespaceDefinition (..), pattern Core)
@@ -74,16 +74,25 @@ loadNotationFiles = foldM loadNotationFile
         force $ execContext $ put scope >> evalExpr bulk
     force = either fail pure
 
-withForm :: (FromBULK a) => MatchBULK -> Parser a -> BULK -> Parser a
+(<*:>) :: NamespaceDefinition -> Text -> Parser a -> BULK -> Parser a
+ns <*:> name = withForm $ nsName ns name
+
+(<:>) :: NamespaceDefinition -> Text -> Parser a -> Parser a
+ns <:> name = withNext . withForm (nsName ns name)
+
+withForm :: MatchBULK -> Parser a -> BULK -> Parser a
 withForm MatchBULK{..} parser (Form (op : content))
-    | match op = put (Just content) >> parser
+    | match op = raise $ evalState (Just content) parser
     | otherwise = fail [i|not the expected operator: (#{debug op}) (expected (#{expected}))|]
 withForm _ref _parser bulk = notExpected "form" bulk
 
-withStream :: (FromBULK a) => Parser a -> BULK -> Parser a
+withNext :: (BULK -> Parser a) -> Parser a
+withNext = (nextBULK >>=)
+
+withStream :: Parser a -> BULK -> Parser a
 withStream = withSequence
 
-withSequence :: (FromBULK a) => Parser a -> BULK -> Parser a
+withSequence :: Parser a -> BULK -> Parser a
 withSequence parser (Form content) = put (Just content) >> parser
 withSequence _parser bulk = notExpected "form" bulk
 
@@ -105,6 +114,12 @@ list = do
         Just xs -> do
             put $ Just []
             traverse parseBULK xs
+
+parseString :: BULK -> Parser String
+parseString bulk = either fail (pure . unpack) $ toText bulk
+
+string :: Parser String
+string = withNext parseString
 
 notExpected :: (MonadFail m) => String -> BULK -> m a
 notExpected expected value = fail [i|cannot parse as #{expected}: #{debug value}|]
@@ -128,10 +143,10 @@ instance FromBULK BULK where
 instance (FromBULK a) => FromBULK [a] where
     parseBULK = withSequence list
 
-type Parser a = Sem '[Fail, State (Maybe [BULK])] a
+type Parser a = Sem '[State (Maybe [BULK]), Fail] a
 
 runParser :: Parser a -> Either String a
-runParser = run . evalState Nothing . runFail
+runParser = run . runFail . evalState Nothing
 
 nsName :: NamespaceDefinition -> Text -> MatchBULK
 nsName ns1@(NamespaceDefinition{mnemonic}) mnemonic1 =
