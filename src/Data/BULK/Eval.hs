@@ -12,7 +12,7 @@
 {-# LANGUAGE TypeAbstractions #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Data.BULK.Eval (eval, mkContext, evalExpr, execContext) where
+module Data.BULK.Eval (eval, mkContext, evalExpr, execContext, toText) where
 
 import Control.Category ((>>>))
 import Control.Lens (Prism', over, preview, set, view)
