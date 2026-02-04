@@ -171,7 +171,7 @@ spec = describe "BULK" $ do
                 decodeNotationFile @[()] ctx0 "test/package-bad.bulktext" `shouldReturn` Left "verification failed for package (expected digest 00000000000000000000000000000000 but got 7a6dcf4b2cf07e63b60b893c6ac193b55ce38857e18148afc5b113189324747c)"
             it "has lasting namespaces and packages" $ do
                 ctx <- loadNotationFiles ctx0 ["test/config/foo.bulktext", "test/config/bar.bulktext", "test/config/foobar.bulktext"]
-                decodeNotation ctx "( version 1 0 ) ( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( import 21 2 ( hash0:shake128 #[4] 0x60F24D7E ) ) ( 0x16-00 1 ( 0x15-00 false true 42 ) )" `shouldBe` Right [Bar 1 (Foo False True 42)]
+                decodeNotation ctx "( version 1 0 ) ( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( import 21 2 ( hash0:shake128 #[4] 0x936AFC0C ) ) ( bar:bar 1 ( foo:foo false true 42 ) )" `shouldBe` Right [Bar 1 (Foo False True 42)]
 
         --
         -- Parser monad
@@ -185,8 +185,8 @@ spec = describe "BULK" $ do
                 decodeFile ctx "test/foo.bulk" `shouldReturn` Right [Foo False True 42]
                 decodeFile ctx "test/foos.bulk" `shouldReturn` Right [Foo True True 1, Foo True False 1, Foo False True 2, Foo False False 3, Foo True True 5, Foo False False 8]
                 decodeNotationFile ctx "test/foos.bulktext" `shouldReturn` Right [Foo True True 1, Foo True False 1, Foo False True 2, Foo False False 3, Foo True True 5, Foo False False 8]
-                decodeNotation ctx "( version 1 0 ) ( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( ns 21 ( hash0:shake128 #[4] 0x117A63BB ) )  ( ns 22 ( hash0:shake128 #[4] 0x7F28DB08 ) ) ( 0x16-00 1 ( foo:foo false true 42 ) )" `shouldBe` Right [Bar 1 (Foo False True 42)]
-                decodeNotation ctx "( version 1 0 ) ( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( package ( hash0:shake128 #[4] 0x98FB6648 ) nil ( hash0:shake128 #[4] 0x117A63BB ) ( hash0:shake128 #[4] 0x7F28DB08 ) ) ( import 21 2 ( hash0:shake128 #[4] 0x98FB6648 ) ) ( 0x16-00 1 ( foo:foo false true 42 ) )" `shouldBe` Right [Bar 1 (Foo False True 42)]
+                decodeNotation ctx "( version 1 0 ) ( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( ns 21 ( hash0:shake128 #[4] 0x7F28DB08 ) )  ( ns 22 ( hash0:shake128 #[4] 0x117A63BB ) ) ( bar:bar 1 ( foo:foo false true 42 ) )" `shouldBe` Right [Bar 1 (Foo False True 42)]
+                decodeNotation ctx "( version 1 0 ) ( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( package ( hash0:shake128 #[4] 0xDBE86354 ) nil ( hash0:shake128 #[4] 0x7F28DB08 ) ( hash0:shake128 #[4] 0x117A63BB ) ) ( import 21 2 ( hash0:shake128 #[4] 0xDBE86354 ) ) ( bar:bar 1 ( foo:foo false true 42 ) )" `shouldBe` Right [Bar 1 (Foo False True 42)]
 
         --
         -- Custom encoders
