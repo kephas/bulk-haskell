@@ -35,6 +35,7 @@ import Polysemy (Member, Members, Sem, run)
 import Polysemy.Error (Error, runError, throw)
 import Polysemy.State (State, evalState, execState, get, gets, modify, runState)
 
+import Data.BULK.Decode (VersionConstraint (SetVersion), getStream, parseLazy)
 import Data.BULK.Encode (encode, pattern Nat)
 import Data.BULK.Eval.Types
 import Data.BULK.Hash (isPrefixOf, runCheckDigest)
@@ -74,6 +75,8 @@ coreNS =
             , LazyName 0x06 "define" Core.Define
             , LazyName 0x07 "mnemonic/def" Core.DefineMnemonic
             , LazyName 0x09 "verifiable-ns" Core.VerifyNS
+            , SelfEval 0xF2 "ns2"
+            , SelfEval 0xF3 "pkg2"
             ]
         }
 
@@ -162,13 +165,22 @@ corePackage (identifier@(Array _) : nss) =
 corePackage (Form [Reference digestName, Array pkgDigest] : Nil : nss) =
     verifyQualifiedPackage digestName pkgDigest nss
 corePackage _ = throw TypeMismatch
-coreImport [Nat base, Nat count, expr] = do
-    qualifiedExpr <- evalExpr1 expr
-    foundNSS <- maybe [] (.nsIDs) <$> gets (find (matchOn qualifiedExpr) . view knownPackages)
-    noYield $ traverse (uncurry associateNS) $ zip (take count [base ..]) foundNSS
+coreImport [Nat base, Nat count, expr] =
+    importPackage base count expr
+coreImport [Nat base, Form [Core 0xF2, expr]] = do
+    findNS expr >>= associateNS base
+coreImport [Nat base, Form [Core 0xF3, expr, Nat count]] =
+    importPackage base count expr
 coreImport _ = throw TypeMismatch
 coreDefine [Reference name, expr] =
     noYield $ modify (over definitions (M.insert name $ Expression expr))
+coreDefine [Form [Core 0xF3, Form [Reference digestName, Array pkgDigest]], Array defBytes] = do
+    nested <- either throw pure $ parseLazy (getStream $ SetVersion 1 0) defBytes
+    case nested of
+        Form (Nil : nss) ->
+            verifyQualifiedPackage digestName pkgDigest nss
+        _ ->
+            throw TypeMismatch
 coreDefine _ = throw TypeMismatch
 coreDefineMnemonic [Nil, mnemonic, _doc, value] =
     defineImplicit mnemonic $ Just value
@@ -209,6 +221,12 @@ verifyQualifiedPackage digestName pkgDigest nss = do
             addPackage (MatchQualifiedNamePrefix qualifiedName pkgDigest) nss
         Left err -> do
             throw [i|verification failed for package (#{err})|]
+
+importPackage :: (Members [State Scope, Error String] r) => Int -> Int -> BULK -> Sem r (Maybe BULK)
+importPackage base count expr = do
+    qualifiedExpr <- evalExpr1 expr
+    foundNSS <- maybe [] (.nsIDs) <$> gets (find (matchOn qualifiedExpr) . view knownPackages)
+    noYield $ traverse (uncurry associateNS) $ zip (take count [base ..]) foundNSS
 
 defineImplicit :: (Members [State Scope, Error String] r) => BULK -> Maybe BULK -> Sem r (Maybe BULK)
 defineImplicit mnemonic maybeValue = do

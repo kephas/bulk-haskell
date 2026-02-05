@@ -173,6 +173,10 @@ spec = describe "BULK" $ do
             it "has lasting namespaces and packages" $ do
                 ctx <- loadNotationFiles ctx0 ["test/config/foo.bulktext", "test/config/bar.bulktext", "test/config/foobar.bulktext"]
                 decodeNotation ctx "( version 1 0 ) ( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ( import 21 2 ( hash0:shake128 #[4] 0x936AFC0C ) ) ( bar:bar ( bar:int 1 ) ( bar:foo ( foo:foo false true 42 ) ) )" `shouldBe` Right [Bar 1 (Foo False True 42)]
+            it "has new syntax" $ do
+                ctx <- loadNotationFiles ctx0 ["test/config/foo.bulktext", "test/config/bar.bulktext", "test/config/foobar.bulktext"]
+                decodeNotation ctx "( version 1 0 ) ( import 20 ( ns2 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ) ( import 21 ( ns2 ( hash0:shake128 #[4] 0x117A63BB ) ) ) ( foo:foo false true 42 )" `shouldBe` Right [Foo False True 42]
+                decodeNotation ctx "( version 1 0 ) ( import 20 ( ns2 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ) ( define ( pkg2 ( hash0:shake128 #[4] 0xDBE86354 ) ) #[19] nil ( hash0:shake128 #[4] 0x7F28DB08 ) ( hash0:shake128 #[4] 0x117A63BB ) ) ( import 21 ( pkg2 ( hash0:shake128 #[4] 0xDBE86354 ) 2 ) ) ( bar:bar ( bar:int 1 ) ( bar:foo ( foo:foo false true 42 ) ) )" `shouldBe` Right [Bar 1 (Foo False True 42)]
 
         --
         -- Parser monad
