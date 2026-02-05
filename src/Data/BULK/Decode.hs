@@ -49,8 +49,9 @@ getNext = do
         Prefix2 0b10 num -> pure $ Right $ Array $ BL.singleton num
         Prefix2 0b11 size -> Right . Array <$> getLazyByteString size
         _
-            | marker `elem` [0x4 .. 0xF] ->
-                fail $ show marker ++ " is a reserved marker byte"
+            | marker `elem` [0x4 .. 0xF] -> do
+                pos <- bytesRead
+                fail $ show marker ++ " is a reserved marker byte (pos=" ++ show pos ++ ")"
             | marker `elem` [0x10 .. 0x7F] ->
                 Right <$> getReference marker
             | otherwise -> fail "impossible"
