@@ -23,6 +23,7 @@ import Witch (via)
 import Prelude hiding (words)
 
 import Data.BULK (BULK (Array, Form, Reference), Name (..), VersionConstraint (SetVersion), encode, getExpression, getStream, parseLazy, parseNotation, toIntegral, _BulkExpr, _Int, _Nat)
+import Data.BULK.Debug (Debug (..))
 import Test.BULK.Encode (bulkNum)
 
 parseStreamWith :: VersionConstraint -> ByteString -> Either String BULK
@@ -55,8 +56,16 @@ shouldParseToNat = shouldParseToPrism _Nat
 shouldParseToInt :: ByteString -> Int -> Expectation
 shouldParseToInt = shouldParseToPrism _Int
 
-shouldDenote :: Text -> [BULK] -> Expectation
-text `shouldDenote` list = (parseNotation text >>= parseLazy (getStream $ SetVersion 1 0)) `shouldBe` Right (Form list)
+shouldDenote :: (HasCallStack) => Text -> [BULK] -> Expectation
+text `shouldDenote` list = (parseNotation text >>= parseLazy (getStream $ SetVersion 1 0)) `shouldBeRight` Form list
+
+shouldBeRight :: (HasCallStack, Debug e, Show a, Eq a) => Either e a -> a -> Expectation
+result `shouldBeRight` expected =
+    case result of
+        Right actual ->
+            actual `shouldBe` expected
+        Left err ->
+            expectationFailure $ debug err
 
 unDigits :: [Word8] -> Integer
 unDigits = D.unDigits 256 . map fromIntegral

@@ -39,6 +39,7 @@ ghc-options:
 
 default-extensions:
 - ImportQualifiedPost
+- BlockArguments
 
 library:
   source-dirs: src

@@ -4,6 +4,7 @@
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE NoFieldSelectors #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
@@ -16,7 +17,6 @@ import Data.Bits ((.|.))
 import Data.ByteString.Builder qualified as BB
 import Data.ByteString.Lazy (ByteString)
 import Data.ByteString.Lazy qualified as B
-import Data.Char (isSpace)
 import Data.Functor (void, ($>))
 import Data.List (sortOn)
 import Data.List.NonEmpty (NonEmpty ((:|)))
@@ -31,8 +31,8 @@ import Data.Text.Encoding.Error (lenientDecode)
 import Data.Text.Lazy qualified as LT
 import Data.Text.Lazy.Encoding qualified as LTE
 import Data.Word (Word8)
-import Text.Megaparsec (ErrorFancy (ErrorFail), MonadParsec (..), ParseError (FancyError), ParseErrorBundle (..), ParsecT, ShowErrorComponent (..), TraversableStream, VisualStream, anySingleBut, choice, chunk, errorBundlePretty, many, optional, runParserT, single, some, takeRest, (<|>))
-import Text.Megaparsec.Char (space)
+import Text.Megaparsec (ErrorFancy (ErrorFail), MonadParsec (..), ParseError (FancyError), ParseErrorBundle (..), ParsecT, ShowErrorComponent (..), TraversableStream, VisualStream, choice, chunk, errorBundlePretty, noneOf, optional, runParserT, single, some, (<|>))
+import Text.Megaparsec.Char (space1)
 import Text.Megaparsec.Char.Lexer qualified as L
 import Witch (from)
 
@@ -47,10 +47,12 @@ data NamespaceMap = NamespaceMap {usedNamespaces :: Map Text NotationNS, nextMar
 type Parser = ParsecT String Text (State NamespaceMap)
 
 parseNotation :: Text -> Either String ByteString
-parseNotation source = do
-    lexemes <- runParser showFail lexerP source
-    builders <- flip evalState bulkProfile $ sequence <$> traverse parseTextToken lexemes
-    pure $ BB.toLazyByteString $ mconcat builders
+parseNotation =
+    parseNotationNamed ""
+
+parseNotationNamed :: String -> Text -> Either String ByteString
+parseNotationNamed name source =
+    BB.toLazyByteString <$> runParser showFail name notationP source
 
 parseNotationFile :: FilePath -> IO (Either String BULK)
 parseNotationFile = parseNotationFileWith ReadVersion
@@ -58,12 +60,19 @@ parseNotationFile = parseNotationFileWith ReadVersion
 parseNotationFileWith :: VersionConstraint -> FilePath -> IO (Either String BULK)
 parseNotationFileWith constraint file = do
     text <- readTextFile file
-    pure $ parseNotation text >>= parseLazy (getStream constraint)
+    pure $ parseNotationNamed file text >>= parseLazy (getStream constraint)
 
 readTextFile :: FilePath -> IO Text
 readTextFile file = do
     bytes <- B.readFile file
     pure $ LT.toStrict $ LTE.decodeUtf8With lenientDecode bytes
+
+notationP :: Parser BB.Builder
+notationP =
+    mconcat <$> some (lexeme tokenP)
+
+lexeme :: Parser a -> Parser a
+lexeme = (<* (space1 <|> eof))
 
 bulkCoreNames :: (Integral a) => [(Text, a)]
 bulkCoreNames = zip (T.words "version true false ns package import define mnemonic/def ns-mnemonic verifiable-ns concat subst arg rest stringenc iana-charset codepage string string* blob nested-bulk indexable indexed-bulk indexed-array unsigned-int signed-int fraction binary-float decimal-float binary-fixed decimal-fixed decimal2 prefix prefix* postfix postfix* arity ns2 pkg2") ([0x0 .. 0xD] ++ [0x10 .. 0x19] ++ [0x20 .. 0x27] ++ [0x30 .. 0x34] ++ [0xF2 .. 0xF3])
@@ -73,27 +82,25 @@ bulkProfile = NamespaceMap{usedNamespaces = M.singleton "bulk" NotationNS{namesp
   where
     coreNames = M.fromList bulkCoreNames
 
-lexerP :: Parser [Text]
-lexerP = many $ (quotedStringP <|> tokenSyntaxP) <* space
-
-tokenSyntaxP :: Parser Text
-tokenSyntaxP = takeWhile1P (Just "token") $ not . isSpace
-
-parseTextToken :: Text -> State NamespaceMap (Either String BB.Builder)
-parseTextToken "nil" = pure $ w8 0
-parseTextToken "(" = pure $ w8 1
-parseTextToken ")" = pure $ w8 2
-parseTextToken "#" = pure $ w8 3
-parseTextToken token_ = runParserM showFail tokenP token_
-
 w8 :: (Applicative f) => Word8 -> f BB.Builder
 w8 = pure . BB.word8
 
 tokenP :: Parser BB.Builder
-tokenP = (smallIntP <|> smallArrayP <|> literalBytesP <|> stringP <|> coreP <|> try referenceP <|> decimalP) <* eof
+tokenP = label "token" $ nestedP <|> stringP <|> symbolP "nil" 0 <|> symbolP "(" 1 <|> symbolP ")" 2 <|> smallIntP <|> smallArrayP <|> symbolP "#" 3 <|> literalBytesP <|> stringP <|> coreP <|> try referenceP <|> decimalP
+
+symbolP :: Text -> Word8 -> Parser BB.Builder
+symbolP sym word =
+    chunk sym *> w8 word
+
+nestedP :: Parser BB.Builder
+nestedP = do
+    label "nested BULK" $ between open close $ encodeExpr . Array . BB.toLazyByteString <$> notationP
+  where
+    open = lexeme $ chunk "(["
+    close = chunk "])"
 
 smallIntP :: Parser BB.Builder
-smallIntP = do
+smallIntP = label "small int" do
     value <- chunk "w6[" *> L.decimal <* chunk "]"
     if value < 64
         then
@@ -102,7 +109,7 @@ smallIntP = do
             fail $ "too big for a small unsigned integer: " <> show value
 
 smallArrayP :: Parser BB.Builder
-smallArrayP = do
+smallArrayP = label "small array" do
     size <- chunk "#[" *> L.decimal <* chunk "]"
     w8 $ 0xC0 .|. size
 
@@ -119,13 +126,12 @@ literalBytesP = do
         pure $ BB.word8 byte <> rest
 
 decimalP :: Parser BB.Builder
-decimalP = do
+decimalP =
     encodeExpr . encodeNat <$> (L.decimal :: Parser Int)
 
-quoteP, notQuoteP, quotedStringP :: Parser Text
+quoteP, notQuoteP :: Parser Text
 quoteP = T.singleton <$> single '"'
 notQuoteP = takeWhileP (Just "not quotes") ('"' /=)
-quotedStringP = quoteP <> notQuoteP <> quoteP
 
 stringP :: Parser BB.Builder
 stringP =
@@ -135,15 +141,18 @@ referenceP :: Parser BB.Builder
 referenceP = qualified <|> unqualified
   where
     qualified = do
-        ns <- T.pack <$> some (anySingleBut ':')
+        ns <- mnemonicP
         void $ single ':'
-        name <- takeRest
+        name <- mnemonicP
         ref <- ensureRef ns name
         pure $ encodeExpr ref
     unqualified = do
-        name <- takeRest
+        name <- mnemonicP
         ref <- ensureRef "<empty>" name
         pure $ encodeExpr ref
+
+mnemonicP :: Parser Text
+mnemonicP = T.pack <$> some (noneOf @[] " :")
 
 ensureRef :: Text -> Text -> Parser BULK
 ensureRef nsMnemonic nameMnemonic = do
@@ -212,9 +221,9 @@ testP = choice (zipWith mkParser ["foo-bar", "foo"] [1, 2]) <* eof
   where
     mkParser text int = try $ chunk text $> int
 
-runParser :: (ParseErrorBundle Text String -> String) -> Parser a -> Text -> Either String a
-runParser mapError parser =
-    first mapError . flip evalState bulkProfile . runParserT parser "-"
+runParser :: (ParseErrorBundle Text String -> String) -> String -> Parser a -> Text -> Either String a
+runParser mapError name parser =
+    first mapError . flip evalState bulkProfile . runParserT parser name
 
 runParserM :: (MonadState NamespaceMap m) => (ParseErrorBundle Text String -> String) -> Parser a -> Text -> m (Either String a)
 runParserM mapError parser text = do
@@ -223,4 +232,4 @@ runParserM mapError parser text = do
 
 debugParse :: (Show a) => Parser a -> Text -> IO ()
 debugParse parser text = do
-    putStrLn $ either id show (runParser errorBundlePretty parser text)
+    putStrLn $ either id show (runParser errorBundlePretty "debug" parser text)

@@ -44,6 +44,7 @@ library
       src
   default-extensions:
       ImportQualifiedPost
+      BlockArguments
   ghc-options: -fplugin=Polysemy.Plugin -Wall
   build-depends:
       base >=4.7 && <5
@@ -76,6 +77,7 @@ executable bulk-cli
       app
   default-extensions:
       ImportQualifiedPost
+      BlockArguments
   ghc-options: -fplugin=Polysemy.Plugin -Wall -threaded -rtsopts -with-rtsopts=-N -Wall
   build-depends:
       base >=4.7 && <5
@@ -107,6 +109,7 @@ test-suite bulk-test
       test
   default-extensions:
       ImportQualifiedPost
+      BlockArguments
   ghc-options: -fplugin=Polysemy.Plugin -Wall -threaded -rtsopts -with-rtsopts=-N -Wall
   build-depends:
       QuickCheck

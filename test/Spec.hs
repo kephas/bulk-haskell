@@ -137,6 +137,10 @@ spec = describe "BULK" $ do
             it "uses known mnemonics" $ do
                 ctx <- loadNotationFiles ctx0 ["test/123.bulktext"]
                 decodeNotationFile @[Int] ctx "test/321.bulktext" `shouldReturn` Right [1]
+            it "parses nested BULK" $ do
+                "([ nil ])" `shouldDenote` [Array "\0"]
+                "nil ([ nil ]) nil" `shouldDenote` [Nil, Array "\0", Nil]
+                "([ ( nil ( ) nil ) nil ]) nil" `shouldDenote` [Array "\1\0\1\2\0\2\0", Nil]
         --
         -- Core namespace and evaluation
         describe "core namespace" $ do
@@ -176,7 +180,7 @@ spec = describe "BULK" $ do
             it "has new syntax" $ do
                 ctx <- loadNotationFiles ctx0 ["test/config/foo.bulktext", "test/config/bar.bulktext", "test/config/foobar.bulktext"]
                 decodeNotation ctx "( version 1 0 ) ( import 20 ( ns2 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ) ( import 21 ( ns2 ( hash0:shake128 #[4] 0x117A63BB ) ) ) ( foo:foo false true 42 )" `shouldBe` Right [Foo False True 42]
-                decodeNotation ctx "( version 1 0 ) ( import 20 ( ns2 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ) ( define ( pkg2 ( hash0:shake128 #[4] 0xDBE86354 ) ) #[19] nil ( hash0:shake128 #[4] 0x7F28DB08 ) ( hash0:shake128 #[4] 0x117A63BB ) ) ( import 21 ( pkg2 ( hash0:shake128 #[4] 0xDBE86354 ) 2 ) ) ( bar:bar ( bar:int 1 ) ( bar:foo ( foo:foo false true 42 ) ) )" `shouldBe` Right [Bar 1 (Foo False True 42)]
+                decodeNotation ctx "( version 1 0 ) ( import 20 ( ns2 ( hash0:shake128 #[4] 0xE2ECDA49 ) ) ) ( define ( pkg2 ( hash0:shake128 #[4] 0xDBE86354 ) ) ([ nil ( hash0:shake128 #[4] 0x7F28DB08 ) ( hash0:shake128 #[4] 0x117A63BB ) ]) ) ( import 21 ( pkg2 ( hash0:shake128 #[4] 0xDBE86354 ) 2 ) ) ( bar:bar ( bar:int 1 ) ( bar:foo ( foo:foo false true 42 ) ) )" `shouldBe` Right [Bar 1 (Foo False True 42)]
 
         --
         -- Parser monad
