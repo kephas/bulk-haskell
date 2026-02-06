@@ -66,6 +66,11 @@ result `shouldBeRight` expected =
         Left err ->
             expectationFailure $ debug err
 
+shouldReturnRight :: (HasCallStack, Debug e, Show a, Eq a) => IO (Either e a) -> a -> Expectation
+shouldReturnRight action expected = do
+    actual <- action
+    actual `shouldBeRight` expected
+
 unDigits :: [Word8] -> Integer
 unDigits = D.unDigits 256 . map fromIntegral
 
