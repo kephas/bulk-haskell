@@ -1,11 +1,12 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Data.BULK.Lens where
 
-import Control.Lens (Prism', makePrisms, prism')
+import Control.Lens (Prism', makeLenses, makePrisms, prism', (^?!))
 import Data.Bits (Bits)
 import Data.ByteString.Lazy (ByteString)
 import Data.Either.Extra (eitherToMaybe)
@@ -17,10 +18,14 @@ import Data.BULK.Core (encodeInt, toIntegral)
 import Data.BULK.Decode (VersionConstraint (SetVersion), getExpression, getStream, parseLazy, toNat)
 import Data.BULK.Encode (encode, encodeNat)
 import Data.BULK.TextNotation (parseNotation)
-import Data.BULK.Types (BULK (Form))
+import Data.BULK.Types (BULK (Form), CheckDigest, Context, IncompleteNamespace, Name (..), NameDefinition (..), Scope, Value (..))
+import Data.BULK.Types qualified as Core
 import Data.Maybe (fromMaybe)
 
 makePrisms ''BULK
+makePrisms ''Context
+makeLenses ''Scope
+makeLenses ''IncompleteNamespace
 
 -- | This 'Prism' provides a 'Traversal' for tweaking the natural number encoded as a BULK array
 _Nat :: (Integral a, Bits a) => Prism' BULK a
@@ -51,3 +56,27 @@ _Bulk = bulkStreamL $ SetVersion 1 0
 -- | This 'Prism` provides a 'Traversal' for tweaking the content of a 'ByteString'
 _Hex :: Prism' ByteString Text
 _Hex = prism' (H.lazyByteString . fromMaybe "" . H.decodeHex) (Just . H.strictText . H.lazilyEncodeHex)
+
+_Expression :: Prism' Value BULK
+_Expression = prism' Expression extract
+  where
+    extract (Expression bulk) = Just bulk
+    extract _ = Nothing
+
+_Digest :: Prism' Value CheckDigest
+_Digest = prism' Digest extract
+  where
+    extract (Digest digest) = Just digest
+    extract _ = Nothing
+
+_LazyFunction :: Prism' Value Core.LazyFunction
+_LazyFunction = prism' LazyFunction extract
+  where
+    extract (LazyFunction lazyFunction) = Just lazyFunction
+    extract _ = Nothing
+
+coreName :: BULK -> Text -> Value -> NameDefinition
+coreName ref mnemonic value =
+    NameDefinition{..}
+  where
+    marker = (\(Name _ mrk) -> mrk) $ ref ^?! _Reference

@@ -1,12 +1,17 @@
 {-# LANGUAGE DefaultSignatures #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module Data.BULK.Debug (Debug (..), module Debug.Trace) where
+module Data.BULK.Debug (
+    Debug (..),
+    debugState,
+    module Debug.Trace,
+)
+where
 
-import Data.BULK.Eval.Types
 import Data.BULK.Types
 import Data.Bifunctor (bimap)
 import Data.ByteString.Lazy (ByteString)
@@ -14,7 +19,10 @@ import Data.List (intercalate)
 import Data.Map qualified as M
 import Data.Set qualified as S
 import Data.String.Interpolate (i)
+import Data.Text qualified as T
 import Debug.Trace
+import Polysemy (Member, Sem)
+import Polysemy.State (State, get)
 import Text.Hex qualified as H
 import Witch (from)
 
@@ -54,10 +62,7 @@ instance Debug NamespaceDefinition where
     debug NamespaceDefinition{..} = [i|#{mnemonic}(#{length names}, #{debug matchID}, #{map debug names})|]
 
 instance Debug NameDefinition where
-    debug SelfEval{marker, mnemonic} = [i|#{marker}:#{mnemonic}==|]
-    debug DigestName{marker, mnemonic, checkDigest} = [i|#{marker}:#{mnemonic}~~#{checkDigest}|]
-    debug ExpressionName{marker, mnemonic, expression} = [i|#{marker}:#{mnemonic}=#{debug expression}|]
-    debug LazyName{marker, mnemonic, lazyFunction} = [i|#{marker}:#{mnemonic}<-#{lazyFunction}|]
+    debug NameDefinition{marker, mnemonic, value} = [i|#{marker}:#{mnemonic}#{debug value}|]
 
 instance Debug Package where
     debug Package{..} = [i|{pkg (#{debug matchID}) #{debug nsIDs}|]
@@ -83,16 +88,25 @@ instance Debug Int
 instance {-# OVERLAPPING #-} Debug [Char] where
     debug = id
 
+instance Debug T.Text where
+    debug = T.unpack
+
 instance (Debug v) => Debug (S.Set v) where
     debug = show . map debug . S.toList
 
 instance Debug Scope where
-    debug Scope{..} = [i|ANSS: #{debug _associatedNamespaces}, KNSS: #{debug _knownNamespaces}, LNSS: #{debug _lastingNamespaces}, KPKG: #{debug _knownPackages}, DefNS: #{debug _definingNamespace}|]
+    debug Scope{..} =
+        [i|ANSS: #{debug _associatedNamespaces}, KNSS: #{debug _knownNamespaces}, LNSS: #{debug _lastingNamespaces}, KPKG: #{debug _knownPackages}, DefNS: #{debug _definingNamespace}
+Defs: #{debug _definitions}|]
 
 instance Debug IncompleteNamespace where
     debug IncompleteNamespace{..} = [i|{@#{_nextName} + #{debug _namespaceDefinition}|]
 
 instance Debug Value where
+    debug SelfEval = "=="
     debug (Expression bulk) = [i|=#{debug bulk}|]
-    debug (Digest digest) = [i|=#{digest}|]
+    debug (Digest digest) = [i|=~#{digest}|]
     debug (LazyFunction f) = [i|=#{f}()|]
+
+debugState :: (Member (State s) r, Debug s) => Sem r ()
+debugState = get >>= traceM . debug

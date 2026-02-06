@@ -27,15 +27,15 @@ instance FromBULK BARK where
 hash0 :: NamespaceDefinition
 hash0 =
     NamespaceDefinition
-        { matchID = MatchNamePrefix 0x00 $ fromHex "E2ECDA494A78195B07034AB10B2C4390C94C01251B13D1A483D21E8B781D703D"
+        { matchID = MatchNamePrefix 0x00 $ fromHex "411C77FD48C9C06DC7021C1CAB2FD70FD0749D4F2099BD8DE615000BDED43115"
         , mnemonic = "hash0"
-        , names = [DigestName 0x00 "shake128" CheckShake128]
+        , names = [NameDefinition 0x00 "shake128" $ Digest CheckShake128]
         }
 
 bark :: NamespaceDefinition
 bark =
     NamespaceDefinition
-        { matchID = MatchQualifiedNamePrefix (Name (AssociatedNamespace hash0) 0x00) $ fromHex "0066F0235D80F6EA9336AD97A656A0A96289FAA130C82FE1D0E74CB30B702EB1"
+        { matchID = MatchQualifiedNamePrefix (Name (AssociatedNamespace hash0) 0x00) $ fromHex "6F410D8B538B23B69513B1E62401FB2BF5BFE5F5D90AD0D2FD5CF3FC3ADAC701"
         , mnemonic = "bark"
         , names = []
         }

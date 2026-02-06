@@ -32,7 +32,6 @@ library
       Data.BULK.Decode
       Data.BULK.Encode
       Data.BULK.Eval
-      Data.BULK.Eval.Types
       Data.BULK.Hash
       Data.BULK.Lens
       Data.BULK.TextNotation

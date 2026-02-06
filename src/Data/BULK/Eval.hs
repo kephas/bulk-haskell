@@ -35,12 +35,13 @@ import Polysemy (Member, Members, Sem, run)
 import Polysemy.Error (Error, runError, throw)
 import Polysemy.State (State, evalState, execState, get, gets, modify, runState)
 
+import Data.BULK.Core qualified as Core
 import Data.BULK.Decode (VersionConstraint (SetVersion), getStream, parseLazy)
 import Data.BULK.Encode (encode, pattern Nat)
-import Data.BULK.Eval.Types
 import Data.BULK.Hash (isPrefixOf, runCheckDigest)
-import Data.BULK.Types (BULK (..), CheckDigest, MatchID (..), Name (..), NameDefinition (..), Namespace (..), NamespaceDefinition (..), Package (..), pattern Core)
-import Data.BULK.Types qualified as Core (LazyFunction (..))
+import Data.BULK.Lens (associatedNamespaces, coreName, definingNamespace, definitions, knownNamespaces, knownPackages, lastingNamespaces, namespaceDefinition, nextName, _Digest, _Expression, _LazyFunction)
+import Data.BULK.Types (BULK (..), CheckDigest, Context (..), IncompleteNamespace (..), MatchID (..), Name (..), NameDefinition (..), Namespace (..), NamespaceDefinition (..), Package (..), Scope (..), TypeMismatch (..), Value (..))
+import Data.BULK.Types qualified as Fun (LazyFunction (..))
 import Data.BULK.Types qualified as ND (NamespaceDefinition (..))
 
 eval :: Context -> BULK -> Either String BULK
@@ -68,31 +69,22 @@ coreNS =
         { matchID = MatchNone
         , mnemonic = "bulk"
         , names =
-            [ LazyName 0x00 "version" Core.Version
-            , LazyName 0x03 "ns" Core.AssociateNS
-            , LazyName 0x04 "package" Core.CreatePackage
-            , LazyName 0x05 "import" Core.Import
-            , LazyName 0x06 "define" Core.Define
-            , LazyName 0x07 "mnemonic/def" Core.DefineMnemonic
-            , LazyName 0x09 "verifiable-ns" Core.VerifyNS
-            , SelfEval 0xF2 "ns2"
-            , SelfEval 0xF3 "pkg2"
+            [ coreName Core.Version "version" $ LazyFunction Fun.Version
+            , coreName Core.Import "import" $ LazyFunction Fun.Import
+            , coreName Core.Define "define" $ LazyFunction Fun.Define
+            , coreName Core.MnemonicDef "mnemonic/def" $ LazyFunction Fun.DefineMnemonic
+            , coreName Core.VerifiableNS "verifiable-ns" $ LazyFunction Fun.VerifyNS
             ]
         }
 
 applyNS :: (Member (State Scope) r) => NamespaceDefinition -> Sem r ()
 applyNS ns = do
     modify (over knownNamespaces $ S.insert ns)
-    modify (over definitions $ flip (foldl' maybeInsert) ns.names)
+    modify (over definitions $ flip (foldl' insert) ns.names)
   where
-    maybeInsert :: M.Map Name Value -> NameDefinition -> M.Map Name Value
-    maybeInsert defs (DigestName{marker, checkDigest}) =
-        M.insert (Name (AssociatedNamespace ns) marker) (Digest checkDigest) defs
-    maybeInsert defs (ExpressionName{marker, expression}) =
-        M.insert (Name (AssociatedNamespace ns) marker) (Expression expression) defs
-    maybeInsert defs (LazyName{marker, lazyFunction}) =
-        M.insert (Name CoreNamespace marker) (LazyFunction lazyFunction) defs
-    maybeInsert defs (SelfEval{}) = defs
+    insert defs (NameDefinition{marker, value}) =
+        M.insert (Name actualNS marker) value defs
+    actualNS = if ns == coreNS then CoreNamespace else AssociatedNamespace ns
 
 evalExpr :: (Members [State Scope, Error String] r) => BULK -> Sem r (Maybe BULK)
 evalExpr Nil = yield Nil
@@ -144,37 +136,27 @@ evalAll exprs = do
     void $ modify $ over knownPackages $ S.union scope'._knownPackages
     pure $ catMaybes result
 
-getLazyFunction :: Core.LazyFunction -> forall r. (Members [State Scope, Error TypeMismatch, Error String] r) => [BULK] -> Sem r (Maybe BULK)
-getLazyFunction Core.Version = coreVersion
-getLazyFunction Core.AssociateNS = coreAssociateNS
-getLazyFunction Core.CreatePackage = corePackage
-getLazyFunction Core.Import = coreImport
-getLazyFunction Core.Define = coreDefine
-getLazyFunction Core.DefineMnemonic = coreDefineMnemonic
-getLazyFunction Core.VerifyNS = coreVerifyNS
+getLazyFunction :: Fun.LazyFunction -> forall r. (Members [State Scope, Error TypeMismatch, Error String] r) => [BULK] -> Sem r (Maybe BULK)
+getLazyFunction Fun.Version = coreVersion
+getLazyFunction Fun.Import = coreImport
+getLazyFunction Fun.Define = coreDefine
+getLazyFunction Fun.DefineMnemonic = coreDefineMnemonic
+getLazyFunction Fun.VerifyNS = coreVerifyNS
 
-coreVersion, coreAssociateNS, corePackage, coreImport, coreDefine, coreDefineMnemonic, coreVerifyNS :: (Members [State Scope, Error TypeMismatch, Error String] r) => [BULK] -> Sem r (Maybe BULK)
+coreVersion, coreImport, coreDefine, coreDefineMnemonic, coreVerifyNS :: (Members [State Scope, Error TypeMismatch, Error String] r) => [BULK] -> Sem r (Maybe BULK)
 coreVersion [Nat @Int _, Nat @Int _] =
     pure Nothing
 coreVersion _ = throw TypeMismatch
-coreAssociateNS [Nat marker, expr] =
-    findNS expr >>= associateNS marker
-coreAssociateNS _ = throw TypeMismatch
-corePackage (identifier@(Array _) : nss) =
-    addPackage (MatchEq identifier) nss
-corePackage (Form [Reference digestName, Array pkgDigest] : Nil : nss) =
-    verifyQualifiedPackage digestName pkgDigest nss
-corePackage _ = throw TypeMismatch
 coreImport [Nat base, Nat count, expr] =
     importPackage base count expr
-coreImport [Nat base, Form [Core 0xF2, expr]] = do
+coreImport [Nat base, Form [Core.Namespace, expr]] = do
     findNS expr >>= associateNS base
-coreImport [Nat base, Form [Core 0xF3, expr, Nat count]] =
+coreImport [Nat base, Form [Core.Package, expr, Nat count]] =
     importPackage base count expr
 coreImport _ = throw TypeMismatch
 coreDefine [Reference name, expr] =
     noYield $ modify (over definitions (M.insert name $ Expression expr))
-coreDefine [Form [Core 0xF3, Form [Reference digestName, Array pkgDigest]], Array defBytes] = do
+coreDefine [Form [Core.Package, Form [Reference digestName, Array pkgDigest]], Array defBytes] = do
     nested <- either throw pure $ parseLazy (getStream $ SetVersion 1 0) defBytes
     case nested of
         Form (Nil : nss) ->
@@ -187,9 +169,9 @@ coreDefineMnemonic [Nil, mnemonic, _doc, value] =
 coreDefineMnemonic [Nil, mnemonic, _doc] =
     defineImplicit mnemonic Nothing
 coreDefineMnemonic _ = throw TypeMismatch
-coreVerifyNS (identifier@(Form (Reference (Name (UnassociatedNamespace marker) name) : idRest)) : toDigest@(Nat marker' : Nil : mnemonic : _))
+coreVerifyNS (identifier@(Form [Reference (Name (UnassociatedNamespace marker) name), Array nsDigest]) : toDigest@(Nat marker' : Nil : mnemonic : defs))
     | marker == marker' =
-        verifyBootstrappedNS identifier marker name idRest mnemonic toDigest
+        verifyBootstrappedNS identifier marker name nsDigest mnemonic toDigest defs
 coreVerifyNS (Form [Reference digestName, Array nsDigest] : toDigest@(Nat marker : Nil : mnemonic : _doc : defs)) =
     verifyQualifiedNS digestName nsDigest marker mnemonic toDigest defs
 coreVerifyNS _ = throw TypeMismatch
@@ -229,29 +211,28 @@ importPackage base count expr = do
     noYield $ traverse (uncurry associateNS) $ zip (take count [base ..]) foundNSS
 
 defineImplicit :: (Members [State Scope, Error String] r) => BULK -> Maybe BULK -> Sem r (Maybe BULK)
-defineImplicit mnemonic maybeValue = do
-    let mnemonicS = fromRight "" $ toText mnemonic
+defineImplicit mnemonicExpr maybeExpr = do
+    let mnemonic = fromRight "" $ toText mnemonicExpr
     nsDef <- gets (view definingNamespace)
     case nsDef of
         Just incompleteNS -> do
-            newName <- case maybeValue of
-                Just value -> do
-                    qualifiedValue <- evalExpr1 value
-                    pure $ ExpressionName{marker = incompleteNS._nextName, mnemonic = mnemonicS, expression = qualifiedValue}
-                Nothing ->
-                    pure $ SelfEval{marker = incompleteNS._nextName, mnemonic = mnemonicS}
+            value <- case maybeExpr of
+                Just expr -> Expression <$> evalExpr1 expr
+                Nothing -> pure SelfEval
+            let marker = incompleteNS._nextName
+                newName = NameDefinition{..}
             noYield $ modify (set definingNamespace $ Just $ over namespaceDefinition (addName newName) $ over nextName (+ 1) incompleteNS)
         Nothing ->
-            throw [i|nil marker outside of namespace definition for name: #{mnemonicS}|]
+            throw [i|nil marker outside of namespace definition for name: #{mnemonic}|]
 
-verifyBootstrappedNS :: (Members [State Scope, Error String] r) => BULK -> Int -> Word8 -> [BULK] -> BULK -> [BULK] -> Sem r (Maybe BULK)
-verifyBootstrappedNS identifier marker name idRest mnemonic toDigest = do
+verifyBootstrappedNS :: (Members [State Scope, Error String] r) => BULK -> Int -> Word8 -> ByteString -> BULK -> [BULK] -> [BULK] -> Sem r (Maybe BULK)
+verifyBootstrappedNS identifier marker name nsDigest mnemonic toDigest defs = do
     let mnemonicS = fromRight "" $ toText mnemonic
     foundNS <- gets $ find (matchOn identifier) . view knownNamespaces
     case foundNS of
         Just ns -> do
             void $ modify (over associatedNamespaces (M.insert marker ns))
-            evalExpr $ Form (Core 0x09 : Form (Reference (Name (AssociatedNamespace ns) name) : idRest) : toDigest)
+            verifyQualifiedNS (Name (AssociatedNamespace ns) name) nsDigest marker mnemonic toDigest defs
         Nothing ->
             throw [i|unable to bootstrap namespace: #{mnemonicS}|]
 

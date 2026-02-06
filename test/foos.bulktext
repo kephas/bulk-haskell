@@ -1,6 +1,6 @@
 ( version 1 0 )
-( ns 20 ( hash0:shake128 #[4] 0xE2ECDA49 ) )
-( ns 21 ( hash0:shake128 #[4] 0x117A63BB ) )
+( import 20 ( namespace ( hash0:shake128 #[4] 0x411C77FD ) ) )
+( import 21 ( namespace ( hash0:shake128 #[4] 0x240BD9E3 ) ) )
 ( foo:foo bulk:true  bulk:true  1 )
 ( foo:foo bulk:true  bulk:false 1 )
 ( foo:foo bulk:false bulk:true  2 )

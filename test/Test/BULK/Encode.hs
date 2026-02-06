@@ -4,14 +4,8 @@
 module Test.BULK.Encode where
 
 import Control.Lens ((%~), (&))
-import Data.ByteString.Lazy (ByteString)
-import Data.Word (Word8)
 
 import Data.BULK (BULK (..), encodeNat, _Nat, pattern Nat)
-import Data.BULK.Types (pattern Core)
-
-bulkNum :: Word8 -> ByteString -> BULK
-bulkNum refName bytes = Form [Core refName, Array bytes]
 
 instance Num BULK where
     (+) = nat2 (+)

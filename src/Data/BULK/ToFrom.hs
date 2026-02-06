@@ -29,13 +29,13 @@ import Polysemy.Fail (Fail, runFail)
 import Polysemy.State (State, evalState, get, put)
 
 import Data.BULK.Core (encodeInt)
+import Data.BULK.Core qualified as Core
 import Data.BULK.Debug (debug)
 import Data.BULK.Decode (VersionConstraint (ReadVersion), getStream, parseLazy)
 import Data.BULK.Encode (encodeNat, pattern Nat)
 import Data.BULK.Eval (eval, evalExpr, execContext, mkContext, toText)
-import Data.BULK.Eval.Types (Context (Context))
 import Data.BULK.TextNotation (parseNotation, parseNotationFile)
-import Data.BULK.Types (BULK (..), MatchBULK (..), Name (..), NameDefinition (..), Namespace (AssociatedNamespace), NamespaceDefinition (..), pattern Core)
+import Data.BULK.Types (BULK (..), Context (..), MatchBULK (..), Name (..), NameDefinition (..), Namespace (AssociatedNamespace), NamespaceDefinition (..))
 import Data.ByteString (StrictByteString, toStrict)
 
 class FromBULK a where
@@ -130,8 +130,8 @@ instance FromBULK () where
     parseBULK bulk = notExpected "nil" bulk
 
 instance FromBULK Bool where
-    parseBULK (Core 1) = pure True
-    parseBULK (Core 2) = pure False
+    parseBULK Core.True = pure True
+    parseBULK Core.False = pure False
     parseBULK bulk = notExpected "boolean" bulk
 
 instance FromBULK Int where
@@ -163,8 +163,8 @@ nsName ns1@(NamespaceDefinition{mnemonic}) mnemonic1 =
     expected = [i|#{mnemonic}:#{mnemonic1}|]
 
 instance ToBULK Bool where
-    toBULK True = Core 1
-    toBULK False = Core 2
+    toBULK True = Core.True
+    toBULK False = Core.False
 
 instance ToBULK Int where
     toBULK num

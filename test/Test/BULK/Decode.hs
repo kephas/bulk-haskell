@@ -24,7 +24,6 @@ import Prelude hiding (words)
 
 import Data.BULK (BULK (Array, Form, Reference), Name (..), VersionConstraint (SetVersion), encode, getExpression, getStream, parseLazy, parseNotation, toIntegral, _BulkExpr, _Int, _Nat)
 import Data.BULK.Debug (Debug (..))
-import Test.BULK.Encode (bulkNum)
 
 parseStreamWith :: VersionConstraint -> ByteString -> Either String BULK
 parseStreamWith version = parseLazy (getStream version)
@@ -40,9 +39,9 @@ test_bigger_arrays_decoding size =
     forAll (arraySizedWith size) $ \array ->
         encode [array] `shouldParseTo` array
 
-parseInts :: (Integral a, Show a) => [(Word8, ByteString, a)] -> IO ()
+parseInts :: (HasCallStack, Integral a, Show a) => [(BULK, ByteString, a)] -> IO ()
 parseInts = traverse_ \(kind, bytes, value) ->
-    toIntegral (bulkNum kind bytes) `shouldBe` Just value
+    toIntegral (Form [kind, Array bytes]) `shouldBe` Just value
 
 shouldParseTo :: ByteString -> BULK -> Expectation
 words `shouldParseTo` expr = parseLazy getExpression words `shouldBe` Right expr

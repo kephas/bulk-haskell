@@ -9,6 +9,8 @@
 module Data.BULK.Types where
 
 import Data.ByteString.Lazy (ByteString)
+import Data.Map.Strict qualified as M
+import Data.Set qualified as S
 import Data.Text (Text)
 import Data.Word (Word8)
 import Witch (From (..), TryFrom (..), maybeTryFrom)
@@ -39,31 +41,18 @@ data NamespaceDefinition
     }
     deriving (Eq, Ord, Show)
 
-data NameDefinition
-    = SelfEval
-        { marker :: Word8
-        , mnemonic :: Text
-        }
-    | DigestName
-        { marker :: Word8
-        , mnemonic :: Text
-        , checkDigest :: CheckDigest
-        }
-    | ExpressionName
-        { marker :: Word8
-        , mnemonic :: Text
-        , expression :: BULK
-        }
-    | LazyName
-        { marker :: Word8
-        , mnemonic :: Text
-        , lazyFunction :: LazyFunction
-        }
+data NameDefinition = NameDefinition
+    { marker :: Word8
+    , mnemonic :: Text
+    , value :: Value
+    }
     deriving (Eq, Ord, Show)
+
+data Value = SelfEval | Expression BULK | Digest CheckDigest | LazyFunction LazyFunction deriving (Eq, Ord, Show)
 
 data CheckDigest = CheckShake128 deriving (Eq, Ord, Show)
 
-data LazyFunction = Version | AssociateNS | CreatePackage | Import | Define | DefineMnemonic | VerifyNS
+data LazyFunction = Version | Import | Define | DefineMnemonic | VerifyNS
     deriving (Eq, Ord, Show)
 
 data Package = Package
@@ -80,6 +69,26 @@ data MatchID
     deriving (Eq, Ord, Show)
 
 data MatchBULK = MatchBULK {match :: BULK -> Bool, expected :: Text}
+
+newtype Context = Context {scope :: Scope} deriving (Show)
+
+data Scope = Scope
+    { _associatedNamespaces :: M.Map Int NamespaceDefinition
+    , _definitions :: M.Map Name Value
+    , _knownNamespaces :: S.Set NamespaceDefinition
+    , _lastingNamespaces :: S.Set NamespaceDefinition
+    , _knownPackages :: S.Set Package
+    , _definingNamespace :: Maybe IncompleteNamespace
+    }
+    deriving (Show)
+
+data TypeMismatch = TypeMismatch
+
+data IncompleteNamespace = IncompleteNamespace
+    { _namespaceDefinition :: NamespaceDefinition
+    , _nextName :: Word8
+    }
+    deriving (Show)
 
 instance From Int Namespace where
     from 0x10 = CoreNamespace
