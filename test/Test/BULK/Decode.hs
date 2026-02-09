@@ -22,11 +22,8 @@ import Test.QuickCheck.Instances.ByteString ()
 import Witch (via)
 import Prelude hiding (words)
 
-import Data.BULK (BULK (Array, Form, Reference), Name (..), VersionConstraint (SetVersion), encode, getExpression, getStream, parseLazy, parseNotation, toIntegral, _BulkExpr, _Int, _Nat)
+import Data.BULK (BULK (Array, Form, Reference), Name (..), encode, getExpression, parseLazy, parseNotation, parseStreamV1, toIntegral, _BulkExpr, _Int, _Nat)
 import Data.BULK.Debug (Debug (..))
-
-parseStreamWith :: VersionConstraint -> ByteString -> Either String BULK
-parseStreamWith version = parseLazy (getStream version)
 
 readFailsOn :: Word8 -> Expectation
 readFailsOn word = word `shouldSatisfy` (\w -> isLeft $ parseLazy getExpression $ cons w "\0\0")
@@ -56,7 +53,7 @@ shouldParseToInt :: ByteString -> Int -> Expectation
 shouldParseToInt = shouldParseToPrism _Int
 
 shouldDenote :: (HasCallStack) => Text -> [BULK] -> Expectation
-text `shouldDenote` list = (parseNotation text >>= parseLazy (getStream $ SetVersion 1 0)) `shouldBeRight` Form list
+text `shouldDenote` list = (parseNotation text >>= parseStreamV1) `shouldBeRight` Form list
 
 shouldBeRight :: (HasCallStack, Debug e, Show a, Eq a) => Either e a -> a -> Expectation
 result `shouldBeRight` expected =

@@ -15,7 +15,7 @@ import Data.Text (Text)
 import Text.Hex qualified as H
 
 import Data.BULK.Core (encodeInt, toIntegral)
-import Data.BULK.Decode (VersionConstraint (SetVersion), getExpression, getStream, parseLazy, toNat)
+import Data.BULK.Decode (VersionConstraint (Version1), getExpression, getStream, parseLazy, toNat)
 import Data.BULK.Encode (encode, encodeNat)
 import Data.BULK.TextNotation (parseNotation)
 import Data.BULK.Types (BULK (Form), CheckDigest, Context, IncompleteNamespace, Name (..), NameDefinition (..), Scope, Value (..))
@@ -51,7 +51,7 @@ bulkStreamL constraint = prism' (encode . forceList) (eitherToMaybe . parseLazy 
 
 -- | This 'Prism' provides a 'Traversal' for tweaking the yield of a BULK 1.0 stream (that doesn't need to contain a version form)
 _Bulk :: Prism' ByteString BULK
-_Bulk = bulkStreamL $ SetVersion 1 0
+_Bulk = bulkStreamL Version1
 
 -- | This 'Prism` provides a 'Traversal' for tweaking the content of a 'ByteString'
 _Hex :: Prism' ByteString Text

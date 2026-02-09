@@ -4,9 +4,11 @@
 
 module Data.BULK.Decode (
     readFile,
-    readFileWithVersion,
+    readFileV1,
     getExpression,
     getStream,
+    parseStream,
+    parseStreamV1,
     parseLazy,
     VersionConstraint (..),
     toNat,
@@ -28,14 +30,21 @@ import Data.BULK.Types (BULK (..), Name (..), pattern Core)
 data Syntax = FormEnd
 
 -- | Version specification
-data VersionConstraint = ReadVersion | SetVersion Int Int
+data VersionConstraint = ReadVersion | Version1
 
 -- | Read an entire file as a BULK stream
 readFile :: FilePath -> IO (Either String BULK)
-readFile = readFileWithVersion ReadVersion
+readFile path = parseStream <$> BL.readFile path
 
-readFileWithVersion :: VersionConstraint -> FilePath -> IO (Either String BULK)
-readFileWithVersion version path = parseLazy (getStream version) <$> BL.readFile path
+readFileV1 :: FilePath -> IO (Either String BULK)
+readFileV1 path = parseStreamV1 <$> BL.readFile path
+
+-- | Parse an entire bytestring as a BULK stream
+parseStream :: ByteString -> Either String BULK
+parseStream = parseLazy $ getStream ReadVersion
+
+parseStreamV1 :: ByteString -> Either String BULK
+parseStreamV1 = parseLazy $ getStream Version1
 
 -- | Get monad to read one BULK expression
 getNext :: Get (Either Syntax BULK)
@@ -100,8 +109,7 @@ getExpression = getNext >>= either (const $ fail "form end at top level") pure
 
 -- | Get action to read an entire BULK stream
 getStream :: VersionConstraint -> Get BULK
-getStream (SetVersion 1 _) = Form <$> getSequence AtTopLevel
-getStream (SetVersion _ _) = fail "this application only supports BULK version 1.x"
+getStream Version1 = Form <$> getSequence AtTopLevel
 getStream ReadVersion = do
     result@(first : _) <- getSequence AtTopLevel
     case first of

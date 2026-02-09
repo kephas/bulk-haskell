@@ -36,7 +36,7 @@ import Polysemy.Error (Error, runError, throw)
 import Polysemy.State (State, evalState, execState, get, gets, modify, runState)
 
 import Data.BULK.Core qualified as Core
-import Data.BULK.Decode (VersionConstraint (SetVersion), getStream, parseLazy)
+import Data.BULK.Decode (parseStreamV1)
 import Data.BULK.Encode (encode, pattern Nat)
 import Data.BULK.Hash (isPrefixOf, runCheckDigest)
 import Data.BULK.Lens (associatedNamespaces, coreName, definingNamespace, definitions, knownNamespaces, knownPackages, lastingNamespaces, namespaceDefinition, nextName, _Digest, _Expression, _LazyFunction)

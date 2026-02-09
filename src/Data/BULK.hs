@@ -5,7 +5,7 @@ module Data.BULK (
 ) where
 
 import Data.BULK.Core as Reexport (define, encodeInt, toIntegral, version)
-import Data.BULK.Decode as Reexport (VersionConstraint (..), getExpression, getStream, parseLazy, readFile, readFileWithVersion, toNat)
+import Data.BULK.Decode as Reexport (VersionConstraint (..), getExpression, getStream, parseLazy, parseStream, parseStreamV1, readFile, readFileV1, toNat)
 import Data.BULK.Encode as Reexport (encode, encodeNat, pattern Nat)
 import Data.BULK.Eval as Reexport (eval)
 import Data.BULK.Lens as Reexport (_Array, _BulkExpr, _Form, _Int, _Nat, _Nil, _Reference)
