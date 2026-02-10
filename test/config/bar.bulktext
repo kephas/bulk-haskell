@@ -1,9 +1,10 @@
 ( version 1 0 )
-( import 20 ( namespace ( hash0:shake128 #[32] 0x411C77FD48C9C06DC7021C1CAB2FD70FD0749D4F2099BD8DE615000BDED43115 ) ) )
-( verifiable-ns ( hash0:shake128 #[32] 0xE1D1D18CF86DCBBD57EACC42E2214B07B6B2398684E052634FF7F3FC5F3E462E )
-21 nil "bar"
+( import 20 ( namespace ( hash0:shake128 #[32] 0x38E4420105EB3E54B9CBFC72E3A89685B4A3B3BA74BA3DD4D91DE2727C1A6163 ) ) )
+( define ( namespace ( hash0:shake128 #[32] 0x1F59358DC2F7053FACCD3915FCE49C61DB091C02AD30ACE209E8E8EBB6AAFB40 ) 21 ) false
+([ nil "bar"
 "Bar"
 ( mnemonic/def nil "bar" nil )
 ( mnemonic/def nil "int" nil )
 ( mnemonic/def nil "foo" nil )
+])
 )

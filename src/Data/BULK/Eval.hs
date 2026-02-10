@@ -34,7 +34,7 @@ import Data.Word (Word8)
 import GHC.Records (HasField)
 import Polysemy (Member, Members, Sem, run)
 import Polysemy.Error (Error, runError, throw)
-import Polysemy.State (State, evalState, execState, get, gets, modify, runState)
+import Polysemy.State (State, evalState, execState, get, gets, modify)
 
 import Data.BULK.Core qualified as Core
 import Data.BULK.Decode (parseStreamV1)
@@ -74,7 +74,6 @@ coreNS =
             , coreName Core.Import "import" $ LazyFunction Fun.Import
             , coreName Core.Define "define" $ LazyFunction Fun.Define
             , coreName Core.MnemonicDef "mnemonic/def" $ LazyFunction Fun.DefineMnemonic
-            , coreName Core.VerifiableNS "verifiable-ns" $ LazyFunction Fun.VerifyNS
             ]
         }
 
@@ -141,9 +140,8 @@ getLazyFunction Fun.Version = coreVersion
 getLazyFunction Fun.Import = coreImport
 getLazyFunction Fun.Define = coreDefine
 getLazyFunction Fun.DefineMnemonic = coreDefineMnemonic
-getLazyFunction Fun.VerifyNS = coreVerifyNS
 
-coreVersion, coreImport, coreDefine, coreDefineMnemonic, coreVerifyNS :: (Members [State Scope, Error TypeMismatch, Error String] r) => [BULK] -> Sem r (Maybe BULK)
+coreVersion, coreImport, coreDefine, coreDefineMnemonic :: (Members [State Scope, Error TypeMismatch, Error String] r) => [BULK] -> Sem r (Maybe BULK)
 coreVersion [Nat @Int _, Nat @Int _] =
     pure Nothing
 coreVersion _ = throw TypeMismatch
@@ -156,6 +154,16 @@ coreImport [Nat base, Form [Core.Package, expr, Nat count]] =
 coreImport _ = throw TypeMismatch
 coreDefine [Reference name, expr] =
     noYield $ modify (over definitions (M.insert name $ Expression expr))
+coreDefine [Form [Core.Namespace, identifier@(Form [Reference digestName, Array nsDigest]), Nat marker], Core.False, Array defBytes] = do
+    nested <- parseNested defBytes
+    case (digestName, nested) of
+        (Name (UnassociatedNamespace marker') name, Form (Nil : mnemonic : _doc : defs))
+            | marker' == marker ->
+                verifyBootstrappedNS identifier marker name nsDigest mnemonic defBytes defs
+        (_, Form (Nil : mnemonic : _doc : defs)) ->
+            verifyQualifiedNS digestName nsDigest marker mnemonic defBytes defs
+        _ ->
+            throw TypeMismatch
 coreDefine [Form [Core.Package, Form [Reference digestName, Array pkgDigest]], Array defBytes] = do
     nested <- parseNested defBytes
     case nested of
@@ -169,12 +177,6 @@ coreDefineMnemonic [Nil, mnemonic, _doc, value] =
 coreDefineMnemonic [Nil, mnemonic, _doc] =
     defineImplicit mnemonic Nothing
 coreDefineMnemonic _ = throw TypeMismatch
-coreVerifyNS (identifier@(Form [Reference (Name (UnassociatedNamespace marker) name), Array nsDigest]) : toDigest@(Nat marker' : Nil : mnemonic : defs))
-    | marker == marker' =
-        verifyBootstrappedNS identifier marker name nsDigest mnemonic toDigest defs
-coreVerifyNS (Form [Reference digestName, Array nsDigest] : toDigest@(Nat marker : Nil : mnemonic : _doc : defs)) =
-    verifyQualifiedNS digestName nsDigest marker mnemonic toDigest defs
-coreVerifyNS _ = throw TypeMismatch
 
 associateNS :: (Members [State Scope, Error String] r) => Int -> Maybe NamespaceDefinition -> Sem r (Maybe BULK)
 associateNS marker foundNS =
@@ -225,7 +227,7 @@ defineImplicit mnemonicExpr maybeExpr = do
         Nothing ->
             throw [i|nil marker outside of namespace definition for name: #{mnemonic}|]
 
-verifyBootstrappedNS :: (Members [State Scope, Error String] r) => BULK -> Int -> Word8 -> ByteString -> BULK -> [BULK] -> [BULK] -> Sem r (Maybe BULK)
+verifyBootstrappedNS :: (Members [State Scope, Error String] r) => BULK -> Int -> Word8 -> ByteString -> BULK -> ByteString -> [BULK] -> Sem r (Maybe BULK)
 verifyBootstrappedNS identifier marker name nsDigest mnemonic toDigest defs = do
     let mnemonicS = fromRight "" $ toText mnemonic
     foundNS <- gets $ find (matchOn identifier) . view knownNamespaces
@@ -236,12 +238,11 @@ verifyBootstrappedNS identifier marker name nsDigest mnemonic toDigest defs = do
         Nothing ->
             throw [i|unable to bootstrap namespace: #{mnemonicS}|]
 
-verifyQualifiedNS :: (Members [State Scope, Error String] r) => Name -> ByteString -> Int -> BULK -> [BULK] -> [BULK] -> Sem r (Maybe BULK)
+verifyQualifiedNS :: (Members [State Scope, Error String] r) => Name -> ByteString -> Int -> BULK -> ByteString -> [BULK] -> Sem r (Maybe BULK)
 verifyQualifiedNS digestName nsDigest marker mnemonic toDigest defs = do
     (qualifiedName, digest) <- retrieveDigest digestName
-    let reencoded = encode toDigest
-        mnemonicS = fromRight "" $ toText mnemonic
-    case runCheckDigest digest nsDigest reencoded of
+    let mnemonicS = fromRight "" $ toText mnemonic
+    case runCheckDigest digest nsDigest toDigest of
         Right () -> do
             let newNS = Just IncompleteNamespace{_namespaceDefinition = NamespaceDefinition{matchID = MatchQualifiedNamePrefix qualifiedName nsDigest, mnemonic = mnemonicS, names = []}, _nextName = 0}
             mayNS <- evalLocalState do

@@ -21,9 +21,6 @@ import Data.List (find)
 import Data.String.Interpolate (i)
 import Data.Text (Text, unpack)
 import Data.Text.Encoding (encodeUtf8)
-import Data.Text.Encoding.Error (OnDecodeError, lenientDecode)
-import Data.Text.Lazy qualified as LT
-import Data.Text.Lazy.Encoding qualified as LTE
 import Polysemy (Sem, raise, run)
 import Polysemy.Fail (Fail, runFail)
 import Polysemy.State (State, evalState, get, put)
@@ -31,7 +28,7 @@ import Polysemy.State (State, evalState, get, put)
 import Data.BULK.Core (encodeInt)
 import Data.BULK.Core qualified as Core
 import Data.BULK.Debug (debug)
-import Data.BULK.Decode (VersionConstraint (ReadVersion), getStream, parseLazy)
+import Data.BULK.Decode (parseStream)
 import Data.BULK.Encode (encodeNat, pattern Nat)
 import Data.BULK.Eval (eval, evalExpr, execContext, mkContext, toText)
 import Data.BULK.TextNotation (parseNotation, parseNotationFile)
@@ -51,7 +48,7 @@ fromBULKWith :: (FromBULK a) => Context -> BULK -> Either String a
 fromBULKWith ctx = runParser . parseBULK <=< eval ctx
 
 decode :: (FromBULK a) => Context -> ByteString -> Either String a
-decode ctx = parseLazy (getStream ReadVersion) >=> fromBULKWith ctx
+decode ctx = parseStream >=> fromBULKWith ctx
 
 decodeNotation :: (FromBULK a) => Context -> Text -> Either String a
 decodeNotation ctx = parseNotation >=> decode ctx
@@ -60,12 +57,9 @@ decodeFile :: (FromBULK a) => Context -> FilePath -> IO (Either String a)
 decodeFile ctx path = decode ctx <$> B.readFile path
 
 decodeNotationFile :: (FromBULK a) => Context -> FilePath -> IO (Either String a)
-decodeNotationFile ctx = decodeNotationFileWith ctx lenientDecode
-
-decodeNotationFileWith :: (FromBULK a) => Context -> OnDecodeError -> FilePath -> IO (Either String a)
-decodeNotationFileWith ctx onError file = do
-    bytes <- B.readFile file
-    pure $ decodeNotation ctx $ LT.toStrict $ LTE.decodeUtf8With onError bytes
+decodeNotationFile ctx file = do
+    bulk <- parseNotationFile file >>= either fail pure
+    pure $ fromBULKWith ctx bulk
 
 loadNotationFiles :: Context -> [FilePath] -> IO Context
 loadNotationFiles = foldM loadNotationFile

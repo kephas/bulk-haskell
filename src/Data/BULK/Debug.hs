@@ -74,6 +74,10 @@ instance (Debug a) => Debug (Maybe a) where
     debug Nothing = "<>"
     debug (Just x) = [i|<#{debug x}>|]
 
+instance (Debug e, Debug a) => Debug (Either e a) where
+    debug (Left err) = [i|<<L #{debug err}>>|]
+    debug (Right res) = [i|<<R #{debug res}>>|]
+
 instance (Debug a) => Debug [a] where
     debug as = "[" ++ intercalate ", " (map debug as) ++ "]"
 

@@ -1,6 +1,7 @@
 ( version 1 0 )
-( verifiable-ns ( hash0:shake128 #[32] 0x411C77FD48C9C06DC7021C1CAB2FD70FD0749D4F2099BD8DE615000BDED43115 )
-20 nil "hash0"
+( define ( namespace ( hash0:shake128 #[32] 0x38E4420105EB3E54B9CBFC72E3A89685B4A3B3BA74BA3DD4D91DE2727C1A6163 ) 20 ) false
+([ nil "hash0"
 "A minimalist bootstrapping namespace for hashing"
 ( mnemonic/def nil "shake128" "SHAKE128" )
+])
 )

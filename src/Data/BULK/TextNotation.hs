@@ -36,7 +36,7 @@ import Text.Megaparsec.Char (space1)
 import Text.Megaparsec.Char.Lexer qualified as L
 import Witch (from)
 
-import Data.BULK.Decode (VersionConstraint (ReadVersion), getStream, parseLazy)
+import Data.BULK.Decode (parseStream)
 import Data.BULK.Encode (encodeExpr, encodeNat)
 import Data.BULK.Types (BULK (..), Name (..), Namespace (..))
 
@@ -55,12 +55,15 @@ parseNotationNamed name source =
     BB.toLazyByteString <$> runParser showFail name notationP source
 
 parseNotationFile :: FilePath -> IO (Either String BULK)
-parseNotationFile = parseNotationFileWith ReadVersion
+parseNotationFile = parseNotationFileInto parseStream
 
-parseNotationFileWith :: VersionConstraint -> FilePath -> IO (Either String BULK)
-parseNotationFileWith constraint file = do
+parseNotationFileBin :: FilePath -> IO (Either String ByteString)
+parseNotationFileBin = parseNotationFileInto Right
+
+parseNotationFileInto :: (ByteString -> Either String a) -> FilePath -> IO (Either String a)
+parseNotationFileInto convert file = do
     text <- readTextFile file
-    pure $ parseNotationNamed file text >>= parseLazy (getStream constraint)
+    pure $ parseNotationNamed file text >>= convert
 
 readTextFile :: FilePath -> IO Text
 readTextFile file = do
