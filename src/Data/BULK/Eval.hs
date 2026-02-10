@@ -11,6 +11,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeAbstractions #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeOperators #-}
 
 module Data.BULK.Eval (eval, mkContext, evalExpr, execContext, toText) where
 
@@ -129,11 +130,10 @@ evalForm content =
 
 evalAll :: (Members [State Scope, Error String] r) => [BULK] -> Sem r [BULK]
 evalAll exprs = do
-    scope <- get
-    (scope', result) <- runState scope (traverse evalExpr exprs)
-    void $ modify $ over knownNamespaces $ S.union scope'._lastingNamespaces
-    void $ modify $ over lastingNamespaces $ S.union scope'._lastingNamespaces
-    void $ modify $ over knownPackages $ S.union scope'._knownPackages
+    (scope, result) <- runLocalState $ traverse evalExpr exprs
+    void $ modify $ over knownNamespaces $ S.union scope._lastingNamespaces
+    void $ modify $ over lastingNamespaces $ S.union scope._lastingNamespaces
+    void $ modify $ over knownPackages $ S.union scope._knownPackages
     pure $ catMaybes result
 
 getLazyFunction :: Fun.LazyFunction -> forall r. (Members [State Scope, Error TypeMismatch, Error String] r) => [BULK] -> Sem r (Maybe BULK)
@@ -157,7 +157,7 @@ coreImport _ = throw TypeMismatch
 coreDefine [Reference name, expr] =
     noYield $ modify (over definitions (M.insert name $ Expression expr))
 coreDefine [Form [Core.Package, Form [Reference digestName, Array pkgDigest]], Array defBytes] = do
-    nested <- either throw pure $ parseLazy (getStream $ SetVersion 1 0) defBytes
+    nested <- parseNested defBytes
     case nested of
         Form (Nil : nss) ->
             verifyQualifiedPackage digestName pkgDigest nss
@@ -243,10 +243,11 @@ verifyQualifiedNS digestName nsDigest marker mnemonic toDigest defs = do
         mnemonicS = fromRight "" $ toText mnemonic
     case runCheckDigest digest nsDigest reencoded of
         Right () -> do
-            scope <- get
             let newNS = Just IncompleteNamespace{_namespaceDefinition = NamespaceDefinition{matchID = MatchQualifiedNamePrefix qualifiedName nsDigest, mnemonic = mnemonicS, names = []}, _nextName = 0}
-                localScope = scope{_definingNamespace = newNS}
-            mayNS <- (view definingNamespace <$>) . execState localScope $ traverse evalExpr defs
+            mayNS <- evalLocalState do
+                void $ modify $ set definingNamespace newNS
+                traverse_ evalExpr defs
+                gets $ view definingNamespace
             case mayNS of
                 Just incompleteNS -> do
                     let definedNS = incompleteNS._namespaceDefinition
@@ -281,6 +282,9 @@ noYield = (Nothing <$)
 leftNothing :: e -> Either e (Maybe a) -> Either e a
 leftNothing err = (>>= maybe (Left err) Right)
 
+parseNested :: (Member (Error String) r) => ByteString -> Sem r BULK
+parseNested = either throw pure . parseStreamV1
+
 toText :: BULK -> Either String Text
 toText (Array bs) = first show $ decodeUtf8' $ toStrict bs
 toText bulk = Left [i|not an array: #{bulk}|]
@@ -291,3 +295,14 @@ addName name nsDef =
 
 (<$$$>) :: (Functor f, Functor g, Functor h) => (a -> b) -> f (g (h a)) -> f (g (h b))
 (<$$$>) = fmap . fmap . fmap
+
+runLocalState :: (Member (State s) r) => Sem (State s : r) a -> Sem r (s, a)
+runLocalState action = evalLocalState do
+    result <- action
+    state_ <- get
+    pure (state_, result)
+
+evalLocalState :: (Member (State s) r) => Sem (State s : r) a -> Sem r a
+evalLocalState action = do
+    state_ <- get
+    evalState state_ action

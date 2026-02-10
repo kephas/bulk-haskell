@@ -71,9 +71,11 @@ loadNotationFiles :: Context -> [FilePath] -> IO Context
 loadNotationFiles = foldM loadNotationFile
   where
     loadNotationFile (Context scope) file = do
-        bulk <- parseNotationFile file >>= force
-        force $ execContext $ put scope >> evalExpr bulk
-    force = either fail pure
+        bulk <- parseNotationFile file >>= failLeftIn file
+        failLeftIn file $ execContext $ put scope >> evalExpr bulk
+
+failLeftIn :: FilePath -> Either String a -> IO a
+failLeftIn file = either (fail . ((file <> ":") <>)) pure
 
 (<*:>) :: NamespaceDefinition -> Text -> Parser a -> BULK -> Parser a
 ns <*:> name = withForm $ nsName ns name
