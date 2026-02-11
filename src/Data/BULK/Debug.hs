@@ -7,11 +7,16 @@
 
 module Data.BULK.Debug (
     Debug (..),
+    traceD,
+    traceDM,
     debugState,
+    debugDefs,
     module Debug.Trace,
 )
 where
 
+import Control.Lens (view)
+import Data.BULK.Lens (definitions)
 import Data.BULK.Types
 import Data.Bifunctor (bimap)
 import Data.ByteString.Lazy (ByteString)
@@ -20,9 +25,10 @@ import Data.Map qualified as M
 import Data.Set qualified as S
 import Data.String.Interpolate (i)
 import Data.Text qualified as T
+import Data.Word (Word8)
 import Debug.Trace
 import Polysemy (Member, Sem)
-import Polysemy.State (State, get)
+import Polysemy.State (State, get, gets)
 import Text.Hex qualified as H
 import Witch (from)
 
@@ -30,6 +36,12 @@ class Debug a where
     debug :: a -> String
     default debug :: (Show a) => a -> String
     debug = show
+
+traceD :: (Debug a) => a -> b -> b
+traceD thing = trace $ debug thing
+
+traceDM :: (Debug a, Monad m) => a -> m ()
+traceDM = traceM . debug
 
 instance Debug BULK where
     debug Nil = "nil"
@@ -89,6 +101,8 @@ instance (Debug k, Debug v) => Debug (M.Map k v) where
 
 instance Debug Int
 
+instance Debug Word8
+
 instance {-# OVERLAPPING #-} Debug [Char] where
     debug = id
 
@@ -114,3 +128,20 @@ instance Debug Value where
 
 debugState :: (Member (State s) r, Debug s) => Sem r ()
 debugState = get >>= traceM . debug
+
+newtype Definition = Definition (Name, Value)
+
+instance Debug Definition where
+    debug (Definition (name, value)) = debug name <> debug value
+
+debugDefs :: (Member (State Scope) r) => [Int] -> [NamespaceDefinition] -> Sem r ()
+debugDefs markers nss = do
+    defs <- gets $ M.toList . view definitions
+    traceDM $ map Definition $ withMarkers defs ++ withNSS defs
+  where
+    withMarkers = filter hasMarker
+    hasMarker (Name (UnassociatedNamespace m) _name, _value) = m `elem` markers
+    hasMarker _def = False
+    withNSS = filter hasNS
+    hasNS (Name (AssociatedNamespace n) _name, _value) = n `elem` nss
+    hasNS _def = False
