@@ -16,7 +16,7 @@ import Data.String.Interpolate (i)
 import Data.Text (Text)
 import Test.Hspec
 import Test.Hspec.QuickCheck (prop)
-import Test.QuickCheck (chooseInt, elements, forAll, listOf)
+import Test.QuickCheck (chooseInt, elements, forAll, vectorOf)
 import Text.Hex qualified as H
 import Witch (from, via)
 import Prelude hiding (readFile)
@@ -143,11 +143,11 @@ spec = describe "BULK" $ do
         -- Core namespace and evaluation
         describe "core namespace" $ do
             prop "has definitions" $ do
-                rvs <- nubBy ((==) `on` fst) <$> listOf ((,) <$> anySimpleRef <*> elements [Core.True, Core.False])
+                rvs <- nubBy ((==) `on` fst) <$> vectorOf 8 ((,) <$> anySimpleRef <*> elements [Core.True, Core.False])
                 let refs = map fst rvs
                     values = map snd rvs
                     definitions = zipWith define refs values
-                pure $ eval' [] (Form $ definitions ++ refs) `shouldBeRight` Form values
+                pure $ eval' (Form $ definitions ++ refs) `shouldBeRight` Form values
             it "respect scoping rule" do
                 shouldFail $ decodeNotation @[[Int]] (mkContext []) "( ( bulk:define 0x1400 42 ) 0x1400 ) ( 0x1400 )"
             describe "parses numbers" $ do
@@ -213,8 +213,8 @@ spec = describe "BULK" $ do
 
     describe "slow tests" $ do
         prop "reads really big generic arrays" $ test_bigger_arrays_decoding 3
-        prop "has self-evaluating expressions" $ forAll (listOf simpleBULK) $ \exprs ->
-            eval' [] (Form exprs) `shouldBeRight` Form exprs
+        prop "has self-evaluating expressions" $ forAll (vectorOf 8 simpleBULK) $ \exprs ->
+            eval' (Form exprs) `shouldBeRight` Form exprs
 
 nesting, primitives, badNesting :: Either String BULK
 nesting = Right $ Form [version 1 0, Form [], Form [Nil, Form [Nil], Form []]]
@@ -309,8 +309,8 @@ instance FromBULK Bar where
     parseBULK = bar <*:> "bar" $ do
         Bar <$> (bar <:> "int") nextBULK <*> (bar <:> "foo") nextBULK
 
-eval' :: [NamespaceDefinition] -> BULK -> Either String BULK
-eval' nss = eval (mkContext nss)
+eval' :: BULK -> Either String BULK
+eval' = eval (mkContext [])
 
 matchTo :: (HasCallStack, ToBULK a) => [(a, BULK)] -> IO ()
 matchTo = traverse_ (uncurry $ shouldBe . toBULK)
