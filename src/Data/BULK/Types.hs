@@ -52,7 +52,7 @@ data Value = SelfEval | Expression BULK | Digest CheckDigest | LazyFunction Lazy
 
 data CheckDigest = CheckShake128 deriving (Eq, Ord, Show)
 
-data LazyFunction = Version | Import | Define | DefineMnemonic
+data LazyFunction = Version | Import | Define | Mnemonic | DefineMnemonic
     deriving (Eq, Ord, Show)
 
 data Package = Package

@@ -19,12 +19,13 @@ import Data.BULK.Decode (parseLazy, toNat)
 import Data.BULK.Encode (boundedPutter, encodeNat, unsafeEncodeBounded)
 import Data.BULK.Types (BULK (..), pattern Core)
 
-pattern Version, Namespace, Package, Import, Define, True, False, UnsignedInt, SignedInt, MnemonicDef :: BULK
+pattern Version, Namespace, Package, Import, Define, Mnemonic, True, False, UnsignedInt, SignedInt, MnemonicDef :: BULK
 pattern Version = Core 0x00
 pattern Import = Core 0x01
 pattern Namespace = Core 0x02
 pattern Package = Core 0x03
 pattern Define = Core 0x04
+pattern Mnemonic = Core 0x05
 pattern True = Core 0x0E
 pattern False = Core 0x0F
 pattern UnsignedInt = Core 0x13

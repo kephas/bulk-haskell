@@ -177,6 +177,8 @@ spec = describe "BULK" $ do
                 ctx <- loadNotationFiles ctx0 ["test/config/foo.bulktext", "test/config/bar.bulktext", "test/config/foobar.bulktext"]
                 decodeNotation ctx "( version 1 0 ) ( import 20 ( namespace ( hash0:shake128 #[4] 0x38E44201 ) ) ) ( import 21 ( namespace ( hash0:shake128 #[4] 0xB7EAE7F5 ) ) ) ( foo:foo false true 42 )" `shouldBeRight` [Foo False True 42]
                 decodeNotation ctx "( version 1 0 ) ( import 20 ( namespace ( hash0:shake128 #[4] 0x38E44201 ) ) ) ( define ( package ( hash0:shake128 #[4] 0x1A70027C ) ) ([ nil ( hash0:shake128 #[4] 0x1F59358D ) ( hash0:shake128 #[4] 0xB7EAE7F5 ) ]) ) ( import 21 ( package ( hash0:shake128 #[4] 0x1A70027C ) 2 ) ) ( bar:bar ( bar:int 1 ) ( bar:foo ( foo:foo false true 42 ) ) )" `shouldBeRight` [Bar 1 (Foo False True 42)]
+                decodeNotation @[Int] ctx0 "( version 1 0 ) ( import 20 ( namespace ( hash0:shake128 #[4] 0x38E44201 ) ) ) ( define ( namespace ( hash0:shake128 #[4] 0xF1D12CD2 ) 21 ) ([ nil ( define quux:quux 0 ) ]) ) quux:quux" `shouldBeRight` [0]
+                decodeNotation @[Quux] ctx0 [i|( version 1 0 ) ( import 20 ( namespace ( hash0:shake128 \#[4] 0x38E44201 ) ) ) ( define ( namespace ( hash0:shake128 \#[4] 0x03A5F567 ) 21 ) ([ nil ( mnemonic ( namespace 21 ) "quux" ) ( mnemonic quux:quuux "quuux" ) ]) ) ( 0x1500 )|] `shouldBeRight` [Quux]
 
         --
         -- Parser monad
@@ -297,6 +299,14 @@ bar =
         , names = []
         }
 
+quux :: NamespaceDefinition
+quux =
+    NamespaceDefinition
+        { matchID = MatchQualifiedNamePrefix (Name (AssociatedNamespace hash0) 0x00) $ fromHex "03A5F567"
+        , mnemonic = "quux"
+        , names = []
+        }
+
 data Foo = Foo Bool Bool Int deriving (Eq, Show)
 
 instance FromBULK Foo where
@@ -308,6 +318,11 @@ data Bar = Bar Int Foo deriving (Eq, Show)
 instance FromBULK Bar where
     parseBULK = bar <*:> "bar" $ do
         Bar <$> (bar <:> "int") nextBULK <*> (bar <:> "foo") nextBULK
+
+data Quux = Quux deriving (Eq, Show)
+
+instance FromBULK Quux where
+    parseBULK = quux <*:> "quuux" $ pure Quux
 
 eval' :: BULK -> Either String BULK
 eval' = eval (mkContext [])
