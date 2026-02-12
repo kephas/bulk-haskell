@@ -11,6 +11,7 @@ import Data.ByteString.Lazy (LazyByteString)
 import Data.String.Interpolate (i)
 import Prelude hiding (length, null)
 
+import Data.BULK.Debug (debug)
 import Data.BULK.Types (CheckDigest (..))
 
 newtype Digest = Digest ByteString
@@ -24,7 +25,7 @@ shake128Digest (Digest referenceDigest) (Content content) =
     case (null referenceDigest, referenceDigest `isPrefixOf` contentDigest) of
         (True, _) -> Left [i|missing digest #{contentDigest}|]
         (False, True) -> Right ()
-        (False, False) -> Left [i|expected digest #{referenceDigest} but got #{contentDigest}|]
+        (False, False) -> Left [i|expected digest #{debug referenceDigest} but got #{contentDigest}|]
   where
     contentDigest = hashWith (SHAKE128 :: SHAKE128 256) content
 

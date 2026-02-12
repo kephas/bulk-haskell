@@ -52,12 +52,12 @@ data Value = SelfEval | Expression BULK | Digest CheckDigest | LazyFunction Lazy
 
 data CheckDigest = CheckShake128 deriving (Eq, Ord, Show)
 
-data LazyFunction = Version | Import | Define | Mnemonic | DefineMnemonic
+data LazyFunction = Version | Import | Define | Mnemonic
     deriving (Eq, Ord, Show)
 
 data Package = Package
     { matchID :: MatchID
-    , nsIDs :: [Maybe NamespaceDefinition]
+    , nsIDs :: [Maybe MatchID]
     }
     deriving (Eq, Ord, Show)
 
@@ -73,22 +73,15 @@ data MatchBULK = MatchBULK {match :: BULK -> Bool, expected :: Text}
 newtype Context = Context {scope :: Scope} deriving (Show)
 
 data Scope = Scope
-    { _associatedNamespaces :: M.Map Int NamespaceDefinition
+    { _associatedNamespaces :: M.Map Int MatchID
     , _definitions :: M.Map Name Value
-    , _knownNamespaces :: S.Set NamespaceDefinition
-    , _lastingNamespaces :: S.Set NamespaceDefinition
+    , _knownNamespaces :: M.Map MatchID NamespaceDefinition
+    , _lastingNamespaces :: S.Set MatchID
     , _knownPackages :: S.Set Package
-    , _definingNamespace :: Maybe IncompleteNamespace
     }
     deriving (Show)
 
 data TypeMismatch = TypeMismatch
-
-data IncompleteNamespace = IncompleteNamespace
-    { _namespaceDefinition :: NamespaceDefinition
-    , _nextName :: Word8
-    }
-    deriving (Show)
 
 instance From Int Namespace where
     from 0x10 = CoreNamespace

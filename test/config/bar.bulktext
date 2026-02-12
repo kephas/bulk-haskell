@@ -1,10 +1,10 @@
 ( version 1 0 )
-( import 20 ( namespace ( hash0:shake128 #[32] 0x38E4420105EB3E54B9CBFC72E3A89685B4A3B3BA74BA3DD4D91DE2727C1A6163 ) ) )
-( define ( namespace ( hash0:shake128 #[32] 0x1F59358DC2F7053FACCD3915FCE49C61DB091C02AD30ACE209E8E8EBB6AAFB40 ) 21 ) false
+( import 20 ( namespace ( hash0:shake128 #[32] 0x99FE9CBED1B3F0D34869530AA1E6A8AE699C8954714A29696DA4386AC7B7B487 ) ) )
+( define ( namespace ( hash0:shake128 #[32] 0xBF5102C66BDC98D2C60280E321D5BD28A87D15A6B491767F6F1D0E0ECD009AF4 ) 21 )
 ([ nil "bar"
 "Bar"
-( mnemonic/def nil "bar" nil )
-( mnemonic/def nil "int" nil )
-( mnemonic/def nil "foo" nil )
+( mnemonic bar:bar "bar" )
+( mnemonic bar:int "int" )
+( mnemonic bar:foo "foo" )
 ])
 )

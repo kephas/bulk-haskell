@@ -34,6 +34,7 @@ import Data.BULK.Eval (eval, evalExpr, execContext, mkContext, toText)
 import Data.BULK.TextNotation (parseNotation, parseNotationFile)
 import Data.BULK.Types (BULK (..), Context (..), MatchBULK (..), Name (..), NameDefinition (..), Namespace (AssociatedNamespace), NamespaceDefinition (..))
 import Data.ByteString (StrictByteString, toStrict)
+import GHC.Stack (HasCallStack)
 
 class FromBULK a where
     parseBULK :: BULK -> Parser a
@@ -53,23 +54,23 @@ decode ctx = parseStream >=> fromBULKWith ctx
 decodeNotation :: (FromBULK a) => Context -> Text -> Either String a
 decodeNotation ctx = parseNotation >=> decode ctx
 
-decodeFile :: (FromBULK a) => Context -> FilePath -> IO (Either String a)
+decodeFile :: (HasCallStack, FromBULK a) => Context -> FilePath -> IO (Either String a)
 decodeFile ctx path = decode ctx <$> B.readFile path
 
-decodeNotationFile :: (FromBULK a) => Context -> FilePath -> IO (Either String a)
+decodeNotationFile :: (HasCallStack, FromBULK a) => Context -> FilePath -> IO (Either String a)
 decodeNotationFile ctx file = do
     bulk <- parseNotationFile file >>= either fail pure
     pure $ fromBULKWith ctx bulk
 
-loadNotationFiles :: Context -> [FilePath] -> IO Context
+loadNotationFiles :: (HasCallStack) => Context -> [FilePath] -> IO Context
 loadNotationFiles = foldM loadNotationFile
   where
     loadNotationFile (Context scope) file = do
         bulk <- parseNotationFile file >>= failLeftIn file
         failLeftIn file $ execContext $ put scope >> evalExpr bulk
 
-failLeftIn :: FilePath -> Either String a -> IO a
-failLeftIn file = either (fail . ((file <> ":") <>)) pure
+failLeftIn :: (HasCallStack) => FilePath -> Either String a -> IO a
+failLeftIn file = either (\err -> fail [i|#{file}: #{err}|]) pure
 
 (<*:>) :: NamespaceDefinition -> Text -> Parser a -> BULK -> Parser a
 ns <*:> name = withForm $ nsName ns name

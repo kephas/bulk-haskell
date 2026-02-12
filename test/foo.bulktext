@@ -1,4 +1,4 @@
 ( version 1 0 )
-( import 20 ( namespace ( hash0:shake128 #[4] 0x38E44201 ) ) )
-( import 21 ( namespace ( hash0:shake128 #[4] 0xB7EAE7F5 ) ) )
+( import 20 ( namespace ( hash0:shake128 #[4] 0x99FE9CBE ) ) )
+( import 21 ( namespace ( hash0:shake128 #[4] 0xEDA7D7C1 ) ) )
 ( foo:foo bulk:false bulk:true 42 )

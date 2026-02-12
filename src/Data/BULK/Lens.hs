@@ -18,14 +18,13 @@ import Data.BULK.Core (encodeInt, toIntegral)
 import Data.BULK.Decode (VersionConstraint (Version1), getExpression, getStream, parseLazy, toNat)
 import Data.BULK.Encode (encode, encodeNat)
 import Data.BULK.TextNotation (parseNotation)
-import Data.BULK.Types (BULK (Form), CheckDigest, Context, IncompleteNamespace, Name (..), NameDefinition (..), Scope, Value (..))
+import Data.BULK.Types (BULK (Form), CheckDigest, Context, Name (..), NameDefinition (..), Scope, Value (..))
 import Data.BULK.Types qualified as Core
 import Data.Maybe (fromMaybe)
 
 makePrisms ''BULK
 makePrisms ''Context
 makeLenses ''Scope
-makeLenses ''IncompleteNamespace
 
 -- | This 'Prism' provides a 'Traversal' for tweaking the natural number encoded as a BULK array
 _Nat :: (Integral a, Bits a) => Prism' BULK a

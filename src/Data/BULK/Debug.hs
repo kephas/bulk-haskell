@@ -8,6 +8,7 @@
 module Data.BULK.Debug (
     Debug (..),
     traceD,
+    traceIdD,
     traceDM,
     debugState,
     debugDefs,
@@ -19,7 +20,8 @@ import Control.Lens (view)
 import Data.BULK.Lens (definitions)
 import Data.BULK.Types
 import Data.Bifunctor (bimap)
-import Data.ByteString.Lazy (ByteString)
+import Data.ByteString qualified as BS
+import Data.ByteString.Lazy qualified as LBS
 import Data.List (intercalate)
 import Data.Map qualified as M
 import Data.Set qualified as S
@@ -40,6 +42,9 @@ class Debug a where
 traceD :: (Debug a) => a -> b -> b
 traceD thing = trace $ debug thing
 
+traceIdD :: (Debug a) => a -> a
+traceIdD = traceWith debug
+
 traceDM :: (Debug a, Monad m) => a -> m ()
 traceDM = traceM . debug
 
@@ -49,7 +54,10 @@ instance Debug BULK where
     debug (Array bs) = [i|[#{debug bs}]|]
     debug (Reference name) = debug name
 
-instance Debug ByteString where
+instance Debug BS.ByteString where
+    debug = from . H.encodeHex
+
+instance Debug LBS.ByteString where
     debug = from . H.lazilyEncodeHex
 
 instance Debug MatchID where
@@ -114,11 +122,8 @@ instance (Debug v) => Debug (S.Set v) where
 
 instance Debug Scope where
     debug Scope{..} =
-        [i|ANSS: #{debug _associatedNamespaces}, KNSS: #{debug _knownNamespaces}, LNSS: #{debug _lastingNamespaces}, KPKG: #{debug _knownPackages}, DefNS: #{debug _definingNamespace}
+        [i|ANSS: #{debug _associatedNamespaces}, KNSS: #{debug _knownNamespaces}, LNSS: #{debug _lastingNamespaces}, KPKG: #{debug _knownPackages}
 Defs: #{debug _definitions}|]
-
-instance Debug IncompleteNamespace where
-    debug IncompleteNamespace{..} = [i|{@#{_nextName} + #{debug _namespaceDefinition}|]
 
 instance Debug Value where
     debug SelfEval = "=="

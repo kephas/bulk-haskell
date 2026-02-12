@@ -78,7 +78,7 @@ lexeme :: Parser a -> Parser a
 lexeme = (<* (space1 <|> eof))
 
 bulkCoreNames :: (Integral a) => [(Text, a)]
-bulkCoreNames = zip (T.words "version import namespace package define mnemonic true false unsigned-int signed-int verifiable-ns mnemonic/def") ([0x0 .. 0x5] ++ [0xE, 0xF, 0x13, 0x14, 0xE0, 0xE1])
+bulkCoreNames = zip (T.words "version import namespace package define mnemonic explain true false unsigned-int signed-int verifiable-ns mnemonic/def") ([0x0 .. 0x6] ++ [0xE, 0xF, 0x13, 0x14, 0xE0, 0xE1])
 
 bulkProfile :: NamespaceMap
 bulkProfile = NamespaceMap{usedNamespaces = M.singleton "bulk" NotationNS{namespace = CoreNamespace, usedNames = coreNames, availableNames = []}, nextMarker = 0x14}
