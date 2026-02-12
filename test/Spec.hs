@@ -57,13 +57,13 @@ spec = describe "BULK" $ do
                 describe "read references" $ do
                     prop "reads one-word marker references" $
                         forAll anySimpleRefBytes $ \(marker, ref) ->
-                            pack [marker, ref] `shouldParseTo` Reference (Name (via @Int marker) (fromIntegral ref))
+                            pack [marker, ref] `shouldParseTo` Reference (Name (via @Int marker) (fromIntegral ref)) Nothing
                     prop "reads two-words marker references" $
                         forAll anySimpleRefBytes $ \(marker, ref) ->
-                            pack [0x7F, marker, ref] `shouldParseTo` Reference (Name (from @Int $ 0x7F + fromIntegral marker) (fromIntegral ref))
+                            pack [0x7F, marker, ref] `shouldParseTo` Reference (Name (from @Int $ 0x7F + fromIntegral marker) (fromIntegral ref)) Nothing
                     prop "reads three-words marker references" $
                         forAll anySimpleRefBytes $ \(marker, ref) ->
-                            pack [0x7F, 0xFF, marker, ref] `shouldParseTo` Reference (Name (from @Int $ 0x7F + 0xFF + fromIntegral marker) (fromIntegral ref))
+                            pack [0x7F, 0xFF, marker, ref] `shouldParseTo` Reference (Name (from @Int $ 0x7F + 0xFF + fromIntegral marker) (fromIntegral ref)) Nothing
                 it "rejects reserved markers" $
                     traverse_ readFailsOn reservedMarkers
             describe "files" $ do
@@ -178,7 +178,6 @@ spec = describe "BULK" $ do
                 decodeNotation ctx "( version 1 0 ) ( import 20 ( namespace ( hash0:shake128 #[4] 0x99FE9CBE ) ) ) ( import 21 ( namespace ( hash0:shake128 #[4] 0xEDA7D7C1 ) ) ) ( foo:foo false true 42 )" `shouldBeRight` [Foo False True 42]
                 decodeNotation ctx "( version 1 0 ) ( import 20 ( namespace ( hash0:shake128 #[4] 0x99FE9CBE ) ) ) ( define ( package ( hash0:shake128 #[4] 0xDD8AD9F4 ) ) ([ nil ( hash0:shake128 #[4] 0xBF5102C6 ) ( hash0:shake128 #[4] 0xEDA7D7C1 ) ]) ) ( import 21 ( package ( hash0:shake128 #[4] 0xDD8AD9F4 ) 2 ) ) ( bar:bar ( bar:int 1 ) ( bar:foo ( foo:foo false true 42 ) ) )" `shouldBeRight` [Bar 1 (Foo False True 42)]
                 decodeNotation @[Int] ctx0 "( version 1 0 ) ( import 20 ( namespace ( hash0:shake128 #[4] 0x99FE9CBE ) ) ) ( define ( namespace ( hash0:shake128 #[4] 0xF1D12CD2 ) 21 ) ([ nil ( define quux:quux 0 ) ]) ) quux:quux" `shouldBeRight` [0]
-                decodeNotation @[Quux] ctx0 [i|( version 1 0 ) ( import 20 ( namespace ( hash0:shake128 \#[4] 0x99FE9CBE ) ) ) ( define ( namespace ( hash0:shake128 \#[4] 0x03A5F567 ) 21 ) ([ nil ( mnemonic ( namespace 21 ) "quux" ) ( mnemonic quux:quuux "quuux" ) ]) ) ( 0x1500 )|] `shouldBeRight` [Quux]
 
         --
         -- Parser monad
@@ -272,9 +271,9 @@ bigIntCases :: [(BULK, ByteString, Integer)]
 bigIntCases =
     [(Core.SignedInt, "\x80\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00", -0x8000_0000_0000_0000_0000_0000_0000_0000)]
 
-hash0 :: NamespaceDefinition
+hash0 :: Namespace
 hash0 =
-    NamespaceDefinition
+    Namespace
         { matchID = MatchNamePrefix 0x00 $ fromHex "99FE9CBED1B3F0D34869530AA1E6A8AE699C8954714A29696DA4386AC7B7B487"
         , mnemonic = "hash0"
         , names = [NameDefinition 0x00 "shake128" $ Digest CheckShake128]
@@ -283,30 +282,21 @@ hash0 =
 ctx0 :: Context
 ctx0 = mkContext [hash0]
 
-foo :: NamespaceDefinition
+foo :: Namespace
 foo =
-    NamespaceDefinition
-        { matchID = MatchQualifiedNamePrefix (Name (AssociatedNamespace hash0) 0x00) $ fromHex "EDA7D7C1A569382D25212D9CDD1595939A4B6D662879D5B33C2DC6DD5F7F1230"
+    Namespace
+        { matchID = MatchQualifiedNamePrefix (Name hash0.matchID 0x00) $ fromHex "EDA7D7C1A569382D25212D9CDD1595939A4B6D662879D5B33C2DC6DD5F7F1230"
         , mnemonic = "foo"
         , names = []
         }
 
-bar :: NamespaceDefinition
+bar :: Namespace
 bar =
-    NamespaceDefinition
-        { matchID = MatchQualifiedNamePrefix (Name (AssociatedNamespace hash0) 0x00) $ fromHex "BF5102C66BDC98D2C60280E321D5BD28A87D15A6B491767F6F1D0E0ECD009AF4"
+    Namespace
+        { matchID = MatchQualifiedNamePrefix (Name hash0.matchID 0x00) $ fromHex "BF5102C66BDC98D2C60280E321D5BD28A87D15A6B491767F6F1D0E0ECD009AF4"
         , mnemonic = "bar"
         , names = []
         }
-
-quux :: NamespaceDefinition
-quux =
-    NamespaceDefinition
-        { matchID = MatchQualifiedNamePrefix (Name (AssociatedNamespace hash0) 0x00) $ fromHex "03A5F567"
-        , mnemonic = "quux"
-        , names = []
-        }
-
 data Foo = Foo Bool Bool Int deriving (Eq, Show)
 
 instance FromBULK Foo where
@@ -318,11 +308,6 @@ data Bar = Bar Int Foo deriving (Eq, Show)
 instance FromBULK Bar where
     parseBULK = bar <*:> "bar" $ do
         Bar <$> (bar <:> "int") nextBULK <*> (bar <:> "foo") nextBULK
-
-data Quux = Quux deriving (Eq, Show)
-
-instance FromBULK Quux where
-    parseBULK = quux <*:> "quuux" $ pure Quux
 
 eval' :: BULK -> Either String BULK
 eval' = eval (mkContext [])

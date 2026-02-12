@@ -15,13 +15,15 @@
 module Data.BULK.ToFrom where
 
 import Control.Monad (foldM, (<=<), (>=>))
+import Data.ByteString (StrictByteString, toStrict)
 import Data.ByteString.Lazy (ByteString)
 import Data.ByteString.Lazy qualified as B
-import Data.List (find)
 import Data.String.Interpolate (i)
 import Data.Text (Text, unpack)
 import Data.Text.Encoding (encodeUtf8)
+import GHC.Stack (HasCallStack)
 import Polysemy (Sem, raise, run)
+import Polysemy.Error (Error)
 import Polysemy.Fail (Fail, runFail)
 import Polysemy.State (State, evalState, get, put)
 
@@ -30,11 +32,10 @@ import Data.BULK.Core qualified as Core
 import Data.BULK.Debug (debug)
 import Data.BULK.Decode (parseStream)
 import Data.BULK.Encode (encodeNat, pattern Nat)
-import Data.BULK.Eval (eval, evalExpr, execContext, mkContext, toText)
+import Data.BULK.Eval (eval, evalExpr, execContext, mkContext, parseText)
 import Data.BULK.TextNotation (parseNotation, parseNotationFile)
-import Data.BULK.Types (BULK (..), Context (..), MatchBULK (..), Name (..), NameDefinition (..), Namespace (AssociatedNamespace), NamespaceDefinition (..))
-import Data.ByteString (StrictByteString, toStrict)
-import GHC.Stack (HasCallStack)
+import Data.BULK.Types (BULK (..), Context (..), MatchBULK (..), Name (..), Namespace (..))
+import Data.BULK.Utils (runErrorToFail)
 
 class FromBULK a where
     parseBULK :: BULK -> Parser a
@@ -72,10 +73,10 @@ loadNotationFiles = foldM loadNotationFile
 failLeftIn :: (HasCallStack) => FilePath -> Either String a -> IO a
 failLeftIn file = either (\err -> fail [i|#{file}: #{err}|]) pure
 
-(<*:>) :: NamespaceDefinition -> Text -> Parser a -> BULK -> Parser a
-ns <*:> name = withForm $ nsName ns name
+(<*:>) :: Namespace -> Text -> Parser a -> BULK -> Parser a
+ns <*:> name = withForm (nsName ns name)
 
-(<:>) :: NamespaceDefinition -> Text -> Parser a -> Parser a
+(<:>) :: Namespace -> Text -> Parser a -> Parser a
 ns <:> name = withNext . withForm (nsName ns name)
 
 withForm :: MatchBULK -> Parser a -> BULK -> Parser a
@@ -114,7 +115,7 @@ list = do
             traverse parseBULK xs
 
 parseString :: BULK -> Parser String
-parseString bulk = either fail (pure . unpack) $ toText bulk
+parseString bulk = runErrorToFail $ unpack <$> parseText bulk
 
 string :: Parser String
 string = withNext parseString
@@ -145,17 +146,16 @@ instance FromBULK BULK where
 instance (FromBULK a) => FromBULK [a] where
     parseBULK = withSequence list
 
-type Parser a = Sem '[State (Maybe [BULK]), Fail] a
+type Parser a = Sem '[State (Maybe [BULK]), Error String, Fail] a
 
 runParser :: Parser a -> Either String a
-runParser = run . runFail . evalState Nothing
+runParser = run . runFail . runErrorToFail . evalState Nothing
 
-nsName :: NamespaceDefinition -> Text -> MatchBULK
-nsName ns1@(NamespaceDefinition{mnemonic}) mnemonic1 =
+nsName :: Namespace -> Text -> MatchBULK
+nsName ns1@(Namespace{mnemonic}) mnemonic1 =
     MatchBULK{..}
   where
-    findName ns = (.marker) <$> find (\nameDef -> nameDef.mnemonic == mnemonic1) ns.names
-    match (Reference (Name (AssociatedNamespace ns2@(NamespaceDefinition{})) name)) = ns1.matchID == ns2.matchID && Just name == findName ns2
+    match (Reference{name = (Name ns2 _), mnemonic = Just mnemonic2}) = ns1.matchID == ns2 && mnemonic1 == mnemonic2
     match _bulk = False
     expected = [i|#{mnemonic}:#{mnemonic1}|]
 

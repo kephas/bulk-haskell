@@ -76,7 +76,8 @@ getArray = do
 getReference :: Word8 -> Get BULK
 getReference marker = do
     ns <- bool getSpecial pure (marker < 0x7F) $ fromIntegral marker
-    Reference . Name (from ns) <$> getWord8
+    name <- getWord8
+    pure $ Reference{name = Name (from ns) name, mnemonic = Nothing}
   where
     getSpecial acc = do
         next <- getInt

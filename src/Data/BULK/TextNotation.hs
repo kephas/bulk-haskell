@@ -38,9 +38,9 @@ import Witch (from)
 
 import Data.BULK.Decode (parseStream)
 import Data.BULK.Encode (encodeExpr, encodeNat)
-import Data.BULK.Types (BULK (..), Name (..), Namespace (..))
+import Data.BULK.Types (BULK (..), Name (..), NamespaceID (CoreNS))
 
-data NotationNS = NotationNS {namespace :: Namespace, usedNames :: Map Text Word8, availableNames :: [Word8]}
+data NotationNS = NotationNS {namespace :: NamespaceID, usedNames :: Map Text Word8, availableNames :: [Word8]}
 
 data NamespaceMap = NamespaceMap {usedNamespaces :: Map Text NotationNS, nextMarker :: Int}
 
@@ -81,7 +81,7 @@ bulkCoreNames :: (Integral a) => [(Text, a)]
 bulkCoreNames = zip (T.words "version import namespace package define mnemonic explain true false unsigned-int signed-int verifiable-ns mnemonic/def") ([0x0 .. 0x6] ++ [0xE, 0xF, 0x13, 0x14, 0xE0, 0xE1])
 
 bulkProfile :: NamespaceMap
-bulkProfile = NamespaceMap{usedNamespaces = M.singleton "bulk" NotationNS{namespace = CoreNamespace, usedNames = coreNames, availableNames = []}, nextMarker = 0x14}
+bulkProfile = NamespaceMap{usedNamespaces = M.singleton "bulk" NotationNS{namespace = CoreNS, usedNames = coreNames, availableNames = []}, nextMarker = 0x14}
   where
     coreNames = M.fromList bulkCoreNames
 
@@ -161,7 +161,7 @@ ensureRef :: Text -> Text -> Parser BULK
 ensureRef nsMnemonic nameMnemonic = do
     ns <- ensureNamespace
     name <- ensureName ns
-    pure $ Reference $ Name ns.namespace name
+    pure $ Reference{name = Name ns.namespace name, mnemonic = Just nameMnemonic}
   where
     ensureNamespace :: Parser NotationNS
     ensureNamespace = do

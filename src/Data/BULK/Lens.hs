@@ -11,6 +11,7 @@ import Data.Bits (Bits)
 import Data.ByteString.Lazy (ByteString)
 import Data.Either.Extra (eitherToMaybe)
 import Data.List qualified as List
+import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Text.Hex qualified as H
 
@@ -20,7 +21,6 @@ import Data.BULK.Encode (encode, encodeNat)
 import Data.BULK.TextNotation (parseNotation)
 import Data.BULK.Types (BULK (Form), CheckDigest, Context, Name (..), NameDefinition (..), Scope, Value (..))
 import Data.BULK.Types qualified as Core
-import Data.Maybe (fromMaybe)
 
 makePrisms ''BULK
 makePrisms ''Context
@@ -78,4 +78,4 @@ coreName :: BULK -> Text -> Value -> NameDefinition
 coreName ref mnemonic value =
     NameDefinition{..}
   where
-    marker = (\(Name _ mrk) -> mrk) $ ref ^?! _Reference
+    marker = (\(Name _ mrk, _) -> mrk) $ ref ^?! _Reference

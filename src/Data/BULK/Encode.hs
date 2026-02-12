@@ -45,12 +45,12 @@ encodeExpr (IntReference ns name)
 pattern IntReference :: Int -> Word8 -> BULK
 pattern IntReference ns num <- (toIntRef -> Just (ns, num))
     where
-        IntReference ns num = Reference $ Name (from ns) num
+        IntReference ns num = Reference{name = Name (from ns) num, mnemonic = Nothing}
 
 {-# COMPLETE Nil, Form, Array, IntReference #-}
 
 toIntRef :: BULK -> Maybe (Int, Word8)
-toIntRef (Reference (Name ns num)) = either (const Nothing) (\marker -> Just (marker, num)) $ tryFrom ns
+toIntRef (Reference{name = (Name ns num)}) = either (const Nothing) (\marker -> Just (marker, num)) $ tryFrom ns
 toIntRef _ = Nothing
 
 encodeNat :: (Integral a, Bits a) => a -> BULK

@@ -19,23 +19,19 @@ data BULK
     = Nil
     | Form [BULK]
     | Array ByteString
-    | Reference Name
+    | Reference {name :: Name, mnemonic :: Maybe Text}
     deriving (Eq, Ord, Show)
 
-data Name = Name Namespace Word8 deriving (Eq, Ord, Show)
-
-data Namespace
-    = CoreNamespace
-    | UnassociatedNamespace Int
-    | AssociatedNamespace NamespaceDefinition
-    deriving (Eq, Ord, Show)
+data Name = Name NamespaceID Word8 deriving (Eq, Ord, Show)
 
 pattern Core :: Word8 -> BULK
-pattern Core name = (Reference (Name CoreNamespace name))
+pattern Core name <- (Reference (Name CoreNS name) _)
+    where
+        Core name = Reference (Name CoreNS name) Nothing
 
-data NamespaceDefinition
-    = NamespaceDefinition
-    { matchID :: MatchID
+data Namespace
+    = Namespace
+    { matchID :: NamespaceID
     , mnemonic :: Text
     , names :: [NameDefinition]
     }
@@ -56,13 +52,15 @@ data LazyFunction = Version | Import | Define | Mnemonic
     deriving (Eq, Ord, Show)
 
 data Package = Package
-    { matchID :: MatchID
-    , nsIDs :: [Maybe MatchID]
+    { matchID :: NamespaceID
+    , nsIDs :: [Maybe NamespaceID]
     }
     deriving (Eq, Ord, Show)
 
-data MatchID
-    = MatchNone
+data NamespaceID
+    = CoreNS
+    | TempNS
+    | UnassociatedNS Int
     | MatchEq BULK
     | MatchNamePrefix Word8 ByteString
     | MatchQualifiedNamePrefix Name ByteString
@@ -73,22 +71,22 @@ data MatchBULK = MatchBULK {match :: BULK -> Bool, expected :: Text}
 newtype Context = Context {scope :: Scope} deriving (Show)
 
 data Scope = Scope
-    { _associatedNamespaces :: M.Map Int MatchID
+    { _associatedNamespaces :: M.Map Int NamespaceID
     , _definitions :: M.Map Name Value
-    , _knownNamespaces :: M.Map MatchID NamespaceDefinition
-    , _lastingNamespaces :: S.Set MatchID
+    , _knownNamespaces :: M.Map NamespaceID Namespace
+    , _lastingNamespaces :: S.Set NamespaceID
     , _knownPackages :: S.Set Package
     }
     deriving (Show)
 
 data TypeMismatch = TypeMismatch
 
-instance From Int Namespace where
-    from 0x10 = CoreNamespace
-    from ns = UnassociatedNamespace ns
+instance From Int NamespaceID where
+    from 0x10 = CoreNS
+    from ns = UnassociatedNS ns
 
-instance TryFrom Namespace Int where
+instance TryFrom NamespaceID Int where
     tryFrom = maybeTryFrom \case
-        CoreNamespace -> Just 0x10
-        UnassociatedNamespace ns -> Just ns
-        AssociatedNamespace _ -> Nothing
+        CoreNS -> Just 0x10
+        UnassociatedNS ns -> Just ns
+        _ -> Nothing

@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -24,18 +25,18 @@ instance FromBULK BARK where
                 shake128 <- bark <:> "hash" $ nextBULK
                 pure Description{..}
 
-hash0 :: NamespaceDefinition
+hash0 :: Namespace
 hash0 =
-    NamespaceDefinition
+    Namespace
         { matchID = MatchNamePrefix 0x00 $ fromHex "99FE9CBED1B3F0D34869530AA1E6A8AE699C8954714A29696DA4386AC7B7B487"
         , mnemonic = "hash0"
         , names = [NameDefinition 0x00 "shake128" $ Digest CheckShake128]
         }
 
-bark :: NamespaceDefinition
+bark :: Namespace
 bark =
-    NamespaceDefinition
-        { matchID = MatchQualifiedNamePrefix (Name (AssociatedNamespace hash0) 0x00) $ fromHex "A3AB0C21DE5AD45685D159AFD1A051FA78128B03A547F63E2A836E5C2DEC3551"
+    Namespace
+        { matchID = MatchQualifiedNamePrefix (Name hash0.matchID 0x00) $ fromHex "A3AB0C21DE5AD45685D159AFD1A051FA78128B03A547F63E2A836E5C2DEC3551"
         , mnemonic = "bark"
         , names = []
         }

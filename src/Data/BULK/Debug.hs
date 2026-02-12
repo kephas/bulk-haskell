@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -17,8 +18,6 @@ module Data.BULK.Debug (
 where
 
 import Control.Lens (view)
-import Data.BULK.Lens (definitions)
-import Data.BULK.Types
 import Data.Bifunctor (bimap)
 import Data.ByteString qualified as BS
 import Data.ByteString.Lazy qualified as LBS
@@ -33,6 +32,9 @@ import Polysemy (Member, Sem)
 import Polysemy.State (State, get, gets)
 import Text.Hex qualified as H
 import Witch (from)
+
+import Data.BULK.Lens (definitions)
+import Data.BULK.Types
 
 class Debug a where
     debug :: a -> String
@@ -52,7 +54,8 @@ instance Debug BULK where
     debug Nil = "nil"
     debug (Form content) = "( " ++ unwords (map debug content) ++ " )"
     debug (Array bs) = [i|[#{debug bs}]|]
-    debug (Reference name) = debug name
+    debug (Reference name Nothing) = debug name
+    debug (Reference (Name ns _) (Just name)) = [i|#{debug ns}:#{name}|]
 
 instance Debug BS.ByteString where
     debug = from . H.encodeHex
@@ -60,26 +63,20 @@ instance Debug BS.ByteString where
 instance Debug LBS.ByteString where
     debug = from . H.lazilyEncodeHex
 
-instance Debug MatchID where
-    debug MatchNone = "!"
+instance Debug NamespaceID where
+    debug CoreNS = "{core}"
+    debug TempNS = "{!}"
+    debug (UnassociatedNS num) = [i|{#{num}}|]
     debug (MatchEq bulk) = [i|== #{debug bulk}|]
-    debug (MatchNamePrefix num bs) = [i|#{num} (<<<) #{take 8 $ debug bs}|]
-    debug (MatchQualifiedNamePrefix _name bs) = [i|<<< #{take 8 $ debug bs}|]
+    debug (MatchNamePrefix num bs) = [i|{~???:#{num}/#{take 6 $ debug bs}}|]
+    debug (MatchQualifiedNamePrefix (Name (MatchNamePrefix _ hbs) hname) bs) = [i|{~#{take 3 $ debug hbs}:#{hname}/#{take 6 $ debug bs}}|]
+    debug (MatchQualifiedNamePrefix (Name _id hname) bs) = [i|{~~~~:#{hname}/#{take 6 $ debug bs}}|]
 
 instance Debug Name where
-    debug (Name ns num) = [i|#{shortNS ns}:#{num}|]
+    debug (Name ns num) = [i|#{debug ns}:#{num}|]
 
 instance Debug Namespace where
-    debug CoreNamespace = "{core}"
-    debug (UnassociatedNamespace num) = [i|{#{num}}|]
-    debug (AssociatedNamespace ns) = [i|#{debug ns}}|]
-
-shortNS :: Namespace -> String
-shortNS (AssociatedNamespace (NamespaceDefinition{mnemonic})) = [i|{#{mnemonic}}|]
-shortNS ns = debug ns
-
-instance Debug NamespaceDefinition where
-    debug NamespaceDefinition{..} = [i|#{mnemonic}(#{length names}, #{debug matchID}, #{map debug names})|]
+    debug Namespace{..} = [i|#{mnemonic}(#{length names}, #{debug matchID}, #{map debug names})|]
 
 instance Debug NameDefinition where
     debug NameDefinition{marker, mnemonic, value} = [i|#{marker}:#{mnemonic}#{debug value}|]
@@ -139,14 +136,13 @@ newtype Definition = Definition (Name, Value)
 instance Debug Definition where
     debug (Definition (name, value)) = debug name <> debug value
 
-debugDefs :: (Member (State Scope) r) => [Int] -> [NamespaceDefinition] -> Sem r ()
+debugDefs :: (Member (State Scope) r) => [Int] -> [Namespace] -> Sem r ()
 debugDefs markers nss = do
     defs <- gets $ M.toList . view definitions
     traceDM $ map Definition $ withMarkers defs ++ withNSS defs
   where
     withMarkers = filter hasMarker
-    hasMarker (Name (UnassociatedNamespace m) _name, _value) = m `elem` markers
+    hasMarker (Name (UnassociatedNS m) _name, _value) = m `elem` markers
     hasMarker _def = False
     withNSS = filter hasNS
-    hasNS (Name (AssociatedNamespace n) _name, _value) = n `elem` nss
-    hasNS _def = False
+    hasNS (Name nsid _name, _value) = nsid `elem` map (.matchID) nss

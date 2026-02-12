@@ -22,7 +22,7 @@ import Test.QuickCheck.Instances.ByteString ()
 import Witch (via)
 import Prelude hiding (words)
 
-import Data.BULK (BULK (Array, Form, Reference), Name (..), encode, getExpression, parseLazy, parseNotation, parseStreamV1, toIntegral, _BulkExpr, _Int, _Nat)
+import Data.BULK (BULK (Array, Form, Reference, mnemonic, name), Name (..), encode, getExpression, parseLazy, parseNotation, parseStreamV1, toIntegral, _BulkExpr, _Int, _Nat)
 import Data.BULK.Debug (Debug (..))
 
 readFailsOn :: Word8 -> Expectation
@@ -119,7 +119,7 @@ anySimpleRefBytes = (,) <$> anySimpleMarker <*> arbitraryByte
 anySimpleRef :: Gen BULK
 anySimpleRef = do
     (ns, name) <- anySimpleRefBytes
-    pure $ Reference $ Name (via @Int ns) (fromIntegral name)
+    pure $ Reference{name = Name (via @Int ns) (fromIntegral name), mnemonic = Nothing}
 
 -- Fixed ranges
 

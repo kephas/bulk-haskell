@@ -37,6 +37,7 @@ library
       Data.BULK.TextNotation
       Data.BULK.ToFrom
       Data.BULK.Types
+      Data.BULK.Utils
   other-modules:
       Paths_bulk
   hs-source-dirs:
