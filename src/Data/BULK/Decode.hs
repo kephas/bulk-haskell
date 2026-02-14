@@ -24,7 +24,7 @@ import Data.Word (Word8)
 import Witch (from)
 import Prelude hiding (readFile)
 
-import Data.BULK.Types (BULK (..), Name (..), pattern Core)
+import Data.BULK.Types (BULK (..), Ref (..), pattern Core)
 
 -- | Syntax token
 data Syntax = FormEnd
@@ -76,8 +76,7 @@ getArray = do
 getReference :: Word8 -> Get BULK
 getReference marker = do
     ns <- bool getSpecial pure (marker < 0x7F) $ fromIntegral marker
-    name <- getWord8
-    pure $ Reference{name = Name (from ns) name, mnemonic = Nothing}
+    Reference . Ref (from ns) . from <$> getWord8
   where
     getSpecial acc = do
         next <- getInt

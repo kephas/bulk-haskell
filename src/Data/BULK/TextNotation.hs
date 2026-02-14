@@ -1,7 +1,5 @@
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TypeApplications #-}
@@ -38,7 +36,7 @@ import Witch (from)
 
 import Data.BULK.Decode (parseStream)
 import Data.BULK.Encode (encodeExpr, encodeNat)
-import Data.BULK.Types (BULK (..), Name (..), NamespaceID (CoreNS))
+import Data.BULK.Types (BULK (..), Name (..), NamespaceID (CoreNS), Ref (..), Value (..))
 
 data NotationNS = NotationNS {namespace :: NamespaceID, usedNames :: Map Text Word8, availableNames :: [Word8]}
 
@@ -78,7 +76,7 @@ lexeme :: Parser a -> Parser a
 lexeme = (<* (space1 <|> eof))
 
 bulkCoreNames :: (Integral a) => [(Text, a)]
-bulkCoreNames = zip (T.words "version import namespace package define mnemonic explain true false unsigned-int signed-int verifiable-ns mnemonic/def") ([0x0 .. 0x6] ++ [0xE, 0xF, 0x13, 0x14, 0xE0, 0xE1])
+bulkCoreNames = zip (T.words "version import namespace package define mnemonic explain true false unsigned-int signed-int trace") ([0x0 .. 0x6] ++ [0xE, 0xF, 0x13, 0x14, 0xD0])
 
 bulkProfile :: NamespaceMap
 bulkProfile = NamespaceMap{usedNamespaces = M.singleton "bulk" NotationNS{namespace = CoreNS, usedNames = coreNames, availableNames = []}, nextMarker = 0x14}
@@ -161,7 +159,7 @@ ensureRef :: Text -> Text -> Parser BULK
 ensureRef nsMnemonic nameMnemonic = do
     ns <- ensureNamespace
     name <- ensureName ns
-    pure $ Reference{name = Name ns.namespace name, mnemonic = Just nameMnemonic}
+    pure $ Reference $ Ref ns.namespace $ Name name (Just nameMnemonic) SelfEval
   where
     ensureNamespace :: Parser NotationNS
     ensureNamespace = do

@@ -1,12 +1,10 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MonoLocalBinds #-}
 {-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RankNTypes #-}
@@ -26,6 +24,7 @@ import Polysemy (Sem, raise, run)
 import Polysemy.Error (Error)
 import Polysemy.Fail (Fail, runFail)
 import Polysemy.State (State, evalState, get, put)
+import Witch (from)
 
 import Data.BULK.Core (encodeInt)
 import Data.BULK.Core qualified as Core
@@ -34,8 +33,8 @@ import Data.BULK.Decode (parseStream)
 import Data.BULK.Encode (encodeNat, pattern Nat)
 import Data.BULK.Eval (eval, evalExpr, execContext, mkContext, parseText)
 import Data.BULK.TextNotation (parseNotation, parseNotationFile)
-import Data.BULK.Types (BULK (..), Context (..), MatchBULK (..), Name (..), Namespace (..))
-import Data.BULK.Utils (runErrorToFail)
+import Data.BULK.Types (BULK (..), Context (..), MatchBULK (..), Name (..), Namespace (..), Ref (..))
+import Data.BULK.Utils (failLeftIn, leftIn, runErrorToFail)
 
 class FromBULK a where
     parseBULK :: BULK -> Parser a
@@ -56,22 +55,19 @@ decodeNotation :: (FromBULK a) => Context -> Text -> Either String a
 decodeNotation ctx = parseNotation >=> decode ctx
 
 decodeFile :: (HasCallStack, FromBULK a) => Context -> FilePath -> IO (Either String a)
-decodeFile ctx path = decode ctx <$> B.readFile path
+decodeFile ctx path = leftIn path . decode ctx <$> B.readFile path
 
 decodeNotationFile :: (HasCallStack, FromBULK a) => Context -> FilePath -> IO (Either String a)
 decodeNotationFile ctx file = do
     bulk <- parseNotationFile file >>= either fail pure
-    pure $ fromBULKWith ctx bulk
+    pure $ leftIn file $ fromBULKWith ctx bulk
 
 loadNotationFiles :: (HasCallStack) => Context -> [FilePath] -> IO Context
 loadNotationFiles = foldM loadNotationFile
   where
-    loadNotationFile (Context scope) file = do
+    loadNotationFile ctx file = do
         bulk <- parseNotationFile file >>= failLeftIn file
-        failLeftIn file $ execContext $ put scope >> evalExpr bulk
-
-failLeftIn :: (HasCallStack) => FilePath -> Either String a -> IO a
-failLeftIn file = either (\err -> fail [i|#{file}: #{err}|]) pure
+        failLeftIn file $ execContext $ put (from ctx) >> evalExpr bulk
 
 (<*:>) :: Namespace -> Text -> Parser a -> BULK -> Parser a
 ns <*:> name = withForm (nsName ns name)
@@ -155,7 +151,7 @@ nsName :: Namespace -> Text -> MatchBULK
 nsName ns1@(Namespace{mnemonic}) mnemonic1 =
     MatchBULK{..}
   where
-    match (Reference{name = (Name ns2 _), mnemonic = Just mnemonic2}) = ns1.matchID == ns2 && mnemonic1 == mnemonic2
+    match (Reference (Ref ns2 Name{mnemonic = Just mnemonic2})) = ns1.matchID == ns2 && mnemonic1 == mnemonic2
     match _bulk = False
     expected = [i|#{mnemonic}:#{mnemonic1}|]
 

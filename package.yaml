@@ -38,8 +38,12 @@ ghc-options:
 - -Wall
 
 default-extensions:
-- ImportQualifiedPost
 - BlockArguments
+- FlexibleContexts
+- ImportQualifiedPost
+- LambdaCase
+- NoFieldSelectors
+- OverloadedRecordDot
 
 library:
   source-dirs: src

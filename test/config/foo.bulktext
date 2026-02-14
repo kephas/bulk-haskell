@@ -1,8 +1,8 @@
 ( version 1 0 )
-( import 20 ( namespace ( hash0:shake128 #[32] 0x99FE9CBED1B3F0D34869530AA1E6A8AE699C8954714A29696DA4386AC7B7B487 ) ) )
-( define ( namespace ( hash0:shake128 #[32] 0xEDA7D7C1A569382D25212D9CDD1595939A4B6D662879D5B33C2DC6DD5F7F1230 ) 21 )
-([ nil "foo"
-"Foo"
+( import 20 ( namespace ( hash0:shake128 #[32] 0x9DBFD6029C1EBE32EC16749703A283DFC1B47C4E925473435529B5769FD89311 ) ) )
+( define ( namespace ( hash0:shake128 #[32] 0x37B6D2582C3A962E2CDB2BF89C47D17179D6F1A3425E73A32010C0CA32AC55BA ) 21 )
+([ nil
+( mnemonic ( namespace 21 ) "foo" )
 ( mnemonic foo:foo "foo" )
 ])
 )

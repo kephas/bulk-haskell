@@ -20,7 +20,7 @@ import Data.Word (Word8)
 import Witch (from, tryFrom)
 
 import Data.BULK.Decode (toNat)
-import Data.BULK.Types (BULK (..), Name (..))
+import Data.BULK.Types (BULK (..), Name (..), Ref (..))
 
 encode :: [BULK] -> BS.ByteString
 encode = BB.toLazyByteString . encodeSeq
@@ -45,12 +45,12 @@ encodeExpr (IntReference ns name)
 pattern IntReference :: Int -> Word8 -> BULK
 pattern IntReference ns num <- (toIntRef -> Just (ns, num))
     where
-        IntReference ns num = Reference{name = Name (from ns) num, mnemonic = Nothing}
+        IntReference ns num = Reference $ Ref (from ns) $ from num
 
 {-# COMPLETE Nil, Form, Array, IntReference #-}
 
 toIntRef :: BULK -> Maybe (Int, Word8)
-toIntRef (Reference{name = (Name ns num)}) = either (const Nothing) (\marker -> Just (marker, num)) $ tryFrom ns
+toIntRef (Reference (Ref ns name)) = either (const Nothing) (\marker -> Just (marker, name.marker)) $ tryFrom ns
 toIntRef _ = Nothing
 
 encodeNat :: (Integral a, Bits a) => a -> BULK

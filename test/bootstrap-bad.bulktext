@@ -1,7 +1,9 @@
 ( version 1 0 )
-( define ( namespace ( 0x14-00 #[32] 0x0000000000000000-0000000000000000-0000000000000000-0000000000000000 ) 20 ) false
-([ nil "bootstrap"
-"A bootstrapping namespace that is supposed to fail"
-( mnemonic/def nil "oops" "this is not associated to any matching algorithm" )
+( define ( namespace ( bootstrap:oops #[32] 0x0000000000000000-0000000000000000-0000000000000000-0000000000000000 ) 20 )
+([ nil
+( mnemonic ( namespace 20 ) "bootstrap" )
+( explain ( namespace 20 ) "A bootstrapping namespace that is supposed to fail" )
+( mnemonic bootstrap:oops "oops" )
+( explain bootstrap:oops "this is not associated to any matching algorithm" )
 ])
 )

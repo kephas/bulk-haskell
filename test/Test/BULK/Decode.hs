@@ -1,4 +1,3 @@
-{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeApplications #-}
@@ -22,7 +21,7 @@ import Test.QuickCheck.Instances.ByteString ()
 import Witch (via)
 import Prelude hiding (words)
 
-import Data.BULK (BULK (Array, Form, Reference, mnemonic, name), Name (..), encode, getExpression, parseLazy, parseNotation, parseStreamV1, toIntegral, _BulkExpr, _Int, _Nat)
+import Data.BULK (BULK (Array, Form, Reference), Name (..), Ref (..), Value (..), encode, getExpression, parseLazy, parseNotation, parseStreamV1, toIntegral, _BulkExpr, _Int, _Nat)
 import Data.BULK.Debug (Debug (..))
 
 readFailsOn :: Word8 -> Expectation
@@ -119,7 +118,7 @@ anySimpleRefBytes = (,) <$> anySimpleMarker <*> arbitraryByte
 anySimpleRef :: Gen BULK
 anySimpleRef = do
     (ns, name) <- anySimpleRefBytes
-    pure $ Reference{name = Name (via @Int ns) (fromIntegral name), mnemonic = Nothing}
+    pure $ Reference $ Ref (via @Int ns) $ Name (fromIntegral name) Nothing SelfEval
 
 -- Fixed ranges
 

@@ -1,23 +1,20 @@
 {-# LANGUAGE DefaultSignatures #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE OverloadedRecordDot #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Data.BULK.Debug (
     Debug (..),
-    traceD,
-    traceIdD,
-    traceDM,
-    debugState,
-    debugDefs,
+    detrace,
+    detraceId,
+    detraceM,
+    detraceState,
     module Debug.Trace,
 )
 where
 
-import Control.Lens (view)
 import Data.Bifunctor (bimap)
 import Data.ByteString qualified as BS
 import Data.ByteString.Lazy qualified as LBS
@@ -29,33 +26,32 @@ import Data.Text qualified as T
 import Data.Word (Word8)
 import Debug.Trace
 import Polysemy (Member, Sem)
-import Polysemy.State (State, get, gets)
+import Polysemy.State (State, get)
 import Text.Hex qualified as H
 import Witch (from)
 
-import Data.BULK.Lens (definitions)
 import Data.BULK.Types
+import Data.Maybe (fromMaybe)
 
 class Debug a where
     debug :: a -> String
     default debug :: (Show a) => a -> String
     debug = show
 
-traceD :: (Debug a) => a -> b -> b
-traceD thing = trace $ debug thing
+detrace :: (Debug a) => a -> b -> b
+detrace thing = trace $ debug thing
 
-traceIdD :: (Debug a) => a -> a
-traceIdD = traceWith debug
+detraceId :: (Debug a) => a -> a
+detraceId = traceWith debug
 
-traceDM :: (Debug a, Monad m) => a -> m ()
-traceDM = traceM . debug
+detraceM :: (Debug a, Monad m) => a -> m ()
+detraceM = traceM . debug
 
 instance Debug BULK where
     debug Nil = "nil"
     debug (Form content) = "( " ++ unwords (map debug content) ++ " )"
     debug (Array bs) = [i|[#{debug bs}]|]
-    debug (Reference name Nothing) = debug name
-    debug (Reference (Name ns _) (Just name)) = [i|#{debug ns}:#{name}|]
+    debug (Reference ref) = debug ref
 
 instance Debug BS.ByteString where
     debug = from . H.encodeHex
@@ -68,24 +64,28 @@ instance Debug NamespaceID where
     debug TempNS = "{!}"
     debug (UnassociatedNS num) = [i|{#{num}}|]
     debug (MatchEq bulk) = [i|== #{debug bulk}|]
-    debug (MatchNamePrefix num bs) = [i|{~???:#{num}/#{take 6 $ debug bs}}|]
-    debug (MatchQualifiedNamePrefix (Name (MatchNamePrefix _ hbs) hname) bs) = [i|{~#{take 3 $ debug hbs}:#{hname}/#{take 6 $ debug bs}}|]
-    debug (MatchQualifiedNamePrefix (Name _id hname) bs) = [i|{~~~~:#{hname}/#{take 6 $ debug bs}}|]
+    debug (MatchNamePrefix num bs) = [i|{#{take 6 $ debug bs}~~<<:#{num}}|]
+    debug (MatchQualifiedNamePrefix (Ref (MatchNamePrefix _ hbs) Name{marker}) bs) = [i|{#{take 6 $ debug bs}~#{take 3 $ debug hbs}:#{debug marker}}|]
+    debug (MatchQualifiedNamePrefix (Ref _id hname) bs) = [i|{~~~~:#{hname}/#{take 6 $ debug bs}}|]
 
-instance Debug Name where
-    debug (Name ns num) = [i|#{debug ns}:#{num}|]
+instance Debug Ref where
+    debug (Ref ns name) = [i|#{debug ns}:#{shortName name}|]
+
+shortName :: Name -> String
+shortName Name{marker, mnemonic = Nothing} = debug marker
+shortName Name{mnemonic = Just name} = debug name
 
 instance Debug Namespace where
-    debug Namespace{..} = [i|#{mnemonic}(#{length names}, #{debug matchID}, #{map debug names})|]
+    debug Namespace{..} = [i|#{mnemonic}(#{length names};#{debug matchID} ;; #{debug names})|]
 
-instance Debug NameDefinition where
-    debug NameDefinition{marker, mnemonic, value} = [i|#{marker}:#{mnemonic}#{debug value}|]
+instance Debug Name where
+    debug Name{marker, mnemonic, value} = [i|#{marker}:#{fromMaybe "" mnemonic}#{debug value}|]
 
 instance Debug Package where
     debug Package{..} = [i|{pkg (#{debug matchID}) #{debug nsIDs}|]
 
 instance Debug Context where
-    debug (Context scope) = debug scope
+    debug Context{..} = [i|{{NSS: #{debug namespaces} PKGS: #{debug packages}}}|]
 
 instance (Debug a) => Debug (Maybe a) where
     debug Nothing = "<>"
@@ -102,7 +102,7 @@ instance (Debug a, Debug b) => Debug (a, b) where
     debug (a, b) = [i|(#{debug a}, #{debug b})|]
 
 instance (Debug k, Debug v) => Debug (M.Map k v) where
-    debug = show . map (bimap debug debug) . M.toList
+    debug = debug . map (bimap debug debug) . M.toList
 
 instance Debug Int
 
@@ -115,12 +115,11 @@ instance Debug T.Text where
     debug = T.unpack
 
 instance (Debug v) => Debug (S.Set v) where
-    debug = show . map debug . S.toList
+    debug = debug . map debug . S.toList
 
 instance Debug Scope where
     debug Scope{..} =
-        [i|ANSS: #{debug _associatedNamespaces}, KNSS: #{debug _knownNamespaces}, LNSS: #{debug _lastingNamespaces}, KPKG: #{debug _knownPackages}
-Defs: #{debug _definitions}|]
+        [i|ANSS: #{debug _associatedNamespaces}, KNSS: #{debug _knownNamespaces}, LNSS: #{debug _lastingNamespaces}, KPKG: #{debug _knownPackages}|]
 
 instance Debug Value where
     debug SelfEval = "=="
@@ -128,21 +127,5 @@ instance Debug Value where
     debug (Digest digest) = [i|=~#{digest}|]
     debug (LazyFunction f) = [i|=#{f}()|]
 
-debugState :: (Member (State s) r, Debug s) => Sem r ()
-debugState = get >>= traceM . debug
-
-newtype Definition = Definition (Name, Value)
-
-instance Debug Definition where
-    debug (Definition (name, value)) = debug name <> debug value
-
-debugDefs :: (Member (State Scope) r) => [Int] -> [Namespace] -> Sem r ()
-debugDefs markers nss = do
-    defs <- gets $ M.toList . view definitions
-    traceDM $ map Definition $ withMarkers defs ++ withNSS defs
-  where
-    withMarkers = filter hasMarker
-    hasMarker (Name (UnassociatedNS m) _name, _value) = m `elem` markers
-    hasMarker _def = False
-    withNSS = filter hasNS
-    hasNS (Name nsid _name, _value) = nsid `elem` map (.matchID) nss
+detraceState :: (Member (State s) r, Debug s) => Sem r ()
+detraceState = get >>= traceM . debug

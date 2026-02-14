@@ -1,10 +1,9 @@
-{-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE PatternSynonyms #-}
-{-# LANGUAGE NoFieldSelectors #-}
 
 module Data.BULK.Types where
 
@@ -19,27 +18,27 @@ data BULK
     = Nil
     | Form [BULK]
     | Array ByteString
-    | Reference {name :: Name, mnemonic :: Maybe Text}
+    | Reference Ref
     deriving (Eq, Ord, Show)
 
-data Name = Name NamespaceID Word8 deriving (Eq, Ord, Show)
+data Ref = Ref {nsID :: NamespaceID, name :: Name} deriving (Eq, Ord, Show)
 
 pattern Core :: Word8 -> BULK
-pattern Core name <- (Reference (Name CoreNS name) _)
+pattern Core name <- (Reference (Ref CoreNS Name{marker = name}))
     where
-        Core name = Reference (Name CoreNS name) Nothing
+        Core name = Reference $ Ref CoreNS $ from name
 
 data Namespace
     = Namespace
     { matchID :: NamespaceID
     , mnemonic :: Text
-    , names :: [NameDefinition]
+    , names :: [Name]
     }
-    deriving (Eq, Ord, Show)
+    deriving (Ord, Show)
 
-data NameDefinition = NameDefinition
+data Name = Name
     { marker :: Word8
-    , mnemonic :: Text
+    , mnemonic :: Maybe Text
     , value :: Value
     }
     deriving (Eq, Ord, Show)
@@ -48,7 +47,7 @@ data Value = SelfEval | Expression BULK | Digest CheckDigest | LazyFunction Lazy
 
 data CheckDigest = CheckShake128 deriving (Eq, Ord, Show)
 
-data LazyFunction = Version | Import | Define | Mnemonic
+data LazyFunction = Version | Import | Define | Mnemonic | Trace
     deriving (Eq, Ord, Show)
 
 data Package = Package
@@ -63,16 +62,16 @@ data NamespaceID
     | UnassociatedNS Int
     | MatchEq BULK
     | MatchNamePrefix Word8 ByteString
-    | MatchQualifiedNamePrefix Name ByteString
+    | MatchQualifiedNamePrefix Ref ByteString
     deriving (Eq, Ord, Show)
 
 data MatchBULK = MatchBULK {match :: BULK -> Bool, expected :: Text}
 
-newtype Context = Context {scope :: Scope} deriving (Show)
+data Context = Context {packages :: S.Set Package, namespaces :: S.Set Namespace}
+    deriving (Eq, Ord, Show)
 
 data Scope = Scope
     { _associatedNamespaces :: M.Map Int NamespaceID
-    , _definitions :: M.Map Name Value
     , _knownNamespaces :: M.Map NamespaceID Namespace
     , _lastingNamespaces :: S.Set NamespaceID
     , _knownPackages :: S.Set Package
@@ -80,6 +79,30 @@ data Scope = Scope
     deriving (Show)
 
 data TypeMismatch = TypeMismatch
+
+newtype Result a = Result {unResult :: Either String a}
+    deriving newtype (Eq, Ord, Show, Functor, Applicative, Monad)
+
+instance MonadFail Result where
+    fail = Result . Left
+
+class WithKey k a | a -> k where
+    getKey :: a -> k
+
+instance WithKey Word8 Name where
+    getKey = (.marker)
+
+instance WithKey NamespaceID Namespace where
+    getKey = (.matchID)
+
+withKey :: (WithKey k a) => a -> (k, a)
+withKey x = (getKey x, x)
+
+instance Eq Namespace where
+    ns1 == ns2 = ns1.matchID == ns2.matchID
+
+instance Semigroup Context where
+    ctx1@Context{} <> ctx2@Context{} = Context{packages = S.union ctx1.packages ctx2.packages, namespaces = S.union ctx1.namespaces ctx2.namespaces}
 
 instance From Int NamespaceID where
     from 0x10 = CoreNS
@@ -90,3 +113,18 @@ instance TryFrom NamespaceID Int where
         CoreNS -> Just 0x10
         UnassociatedNS ns -> Just ns
         _ -> Nothing
+
+instance From Word8 Name where
+    from num = Name num Nothing SelfEval
+
+instance From Context Scope where
+    from ctx =
+        Scope
+            { _associatedNamespaces = M.empty
+            , _knownNamespaces = M.fromList $ map withKey $ S.elems ctx.namespaces
+            , _lastingNamespaces = S.empty
+            , _knownPackages = ctx.packages
+            }
+
+instance From Scope Context where
+    from scope = Context{packages = scope._knownPackages, namespaces = S.fromList $ M.elems scope._knownNamespaces}
