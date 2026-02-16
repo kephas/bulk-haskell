@@ -100,6 +100,7 @@ spec = describe "BULK" $ do
                 "( )" `shouldDenote` [Form []]
                 "( nil )" `shouldDenote` [Form [Nil]]
                 "( nil ( nil nil ) nil )" `shouldDenote` [Form [Nil, Form [Nil, Nil], Nil]]
+                "foo:bar\n( )" `shouldDenote` [IntReference 0x14 0, Form []]
             it "parses small ints" $ for_ smallWords $ \word ->
                 [i|w6[#{word}]|] `shouldDenote` [Array $ singleton word]
             it "parses small arrays" $ do

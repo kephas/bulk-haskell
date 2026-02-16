@@ -29,7 +29,7 @@ import Data.Text.Encoding.Error (lenientDecode)
 import Data.Text.Lazy qualified as LT
 import Data.Text.Lazy.Encoding qualified as LTE
 import Data.Word (Word8)
-import Text.Megaparsec (ErrorFancy (ErrorFail), MonadParsec (..), ParseError (FancyError), ParseErrorBundle (..), ParsecT, ShowErrorComponent (..), TraversableStream, VisualStream, choice, chunk, errorBundlePretty, noneOf, optional, runParserT, single, some, (<|>))
+import Text.Megaparsec (ErrorFancy (ErrorFail), MonadParsec (..), ParseError (FancyError), ParseErrorBundle (..), ParsecT, ShowErrorComponent (..), TraversableStream, VisualStream, choice, chunk, errorBundlePretty, optional, runParserT, single, some, (<|>))
 import Text.Megaparsec.Char (space1)
 import Text.Megaparsec.Char.Lexer qualified as L
 import Witch (from)
@@ -37,6 +37,7 @@ import Witch (from)
 import Data.BULK.Decode (parseStream)
 import Data.BULK.Encode (encodeExpr, encodeNat)
 import Data.BULK.Types (BULK (..), Name (..), NamespaceID (CoreNS), Ref (..), Value (..))
+import Data.Char (isSpace)
 
 data NotationNS = NotationNS {namespace :: NamespaceID, usedNames :: Map Text Word8, availableNames :: [Word8]}
 
@@ -153,7 +154,7 @@ referenceP = qualified <|> unqualified
         pure $ encodeExpr ref
 
 mnemonicP :: Parser Text
-mnemonicP = T.pack <$> some (noneOf @[] " :")
+mnemonicP = takeWhile1P (Just "mnemonic") \char -> char /= ':' && not (isSpace char)
 
 ensureRef :: Text -> Text -> Parser BULK
 ensureRef nsMnemonic nameMnemonic = do
