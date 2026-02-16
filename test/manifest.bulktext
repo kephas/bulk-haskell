@@ -1,6 +1,7 @@
 ( version 1 0 )
 ( import 20 ( namespace ( hash0:shake128 #[32] 0x9DBFD6029C1EBE32EC16749703A283DFC1B47C4E925473435529B5769FD89311 ) ) )
-( import 21 ( namespace ( hash0:shake128 #[32] 0xA3AB0C21DE5AD45685D159AFD1A051FA78128B03A547F63E2A836E5C2DEC3551 ) ) )
+( import 21 ( namespace ( hash0:shake128 #[32] 0xFFF04DBC28671AADCEB008603DFC29B82EEB54CCA5FC25C0C9D64CC926B267A4 ) ) )
+bark:bark 
 ( bark:description
  ( bark:metadata
   ( bark:about ( bark:path "foo" ) )

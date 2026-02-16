@@ -7,14 +7,22 @@ import Data.ByteString (ByteString)
 import Prelude hiding (words)
 
 import Data.BULK
+import Data.BULK.ToFrom (list)
 import Data.BULK.Utils (fromHex)
 import Data.List (uncons)
 import Data.Maybe (fromJust)
 
-data BARK = Description {path :: FilePath, shake128 :: ByteString}
+newtype BARK = BARK [Entry]
+    deriving (Eq, Show)
+
+data Entry = Description {path :: FilePath, shake128 :: ByteString}
     deriving (Eq, Show)
 
 instance FromBULK BARK where
+    parseBULK =
+        bark <*:> "bark" $ BARK <$> list
+
+instance FromBULK Entry where
     parseBULK =
         bark <*:> "description" $
             bark <:> "metadata" $ do
@@ -34,7 +42,7 @@ hash0 =
 bark :: Namespace
 bark =
     Namespace
-        { matchID = MatchQualifiedNamePrefix (Ref hash0.matchID $ forceHead hash0.names) $ fromHex "A3AB0C21DE5AD45685D159AFD1A051FA78128B03A547F63E2A836E5C2DEC3551"
+        { matchID = MatchQualifiedNamePrefix (Ref hash0.matchID $ forceHead hash0.names) $ fromHex "FFF04DBC28671AADCEB008603DFC29B82EEB54CCA5FC25C0C9D64CC926B267A4"
         , mnemonic = "bark"
         , names = []
         }

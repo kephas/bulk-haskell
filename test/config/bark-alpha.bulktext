@@ -1,8 +1,10 @@
 ( version 1 0 )
 ( import 20 ( namespace ( hash0:shake128 #[32] 0x9DBFD6029C1EBE32EC16749703A283DFC1B47C4E925473435529B5769FD89311 ) ) )
-( define ( namespace ( hash0:shake128 #[32] 0xA3AB0C21DE5AD45685D159AFD1A051FA78128B03A547F63E2A836E5C2DEC3551 ) 21 )
-([ nil "bark"
-"Alpha version of BARK, with just SHAKE128 manifests"
+( define ( namespace ( hash0:shake128 #[32] 0xFFF04DBC28671AADCEB008603DFC29B82EEB54CCA5FC25C0C9D64CC926B267A4 ) 21 )
+([ nil
+( mnemonic ( namespace 21 ) "bark" )
+( explain ( namespace 21 ) "Alpha version of BARK, with just SHAKE128 manifests" )
+( mnemonic bark:bark "bark" )
 ( mnemonic bark:description "description" )
 ( mnemonic bark:metadata "metadata" )
 ( mnemonic bark:about "about" )

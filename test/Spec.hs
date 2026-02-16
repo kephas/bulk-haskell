@@ -208,7 +208,7 @@ spec = describe "BULK" $ do
         describe "BARK" $ do
             it "reads a manifest" $ do
                 ctx <- loadNotationFiles ctx0 ["test/config/bark-alpha.bulktext"]
-                decodeNotationFile ctx "test/manifest.bulktext" `shouldReturnRight` [BARK.Description "foo" "0000"]
+                decodeNotationFile ctx "test/manifest.bulktext" `shouldReturnRight` BARK.BARK [BARK.Description "foo" "0000"]
 
     describe "slow tests" $ do
         prop "reads really big generic arrays" $ test_bigger_arrays_decoding 3
