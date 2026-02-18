@@ -167,6 +167,9 @@ spec = describe "BULK" $ do
             it "can bootstrap hashing" $ do
                 decodeNotationFile @[()] ctx0 "test/bootstrap-bad.bulktext" `shouldReturn` Left "test/bootstrap-bad.bulktext: unable to bootstrap namespace: bootstrap"
                 decodeNotationFile @[()] ctx0 "config/hash0.bulktext" `shouldReturnRight` []
+            it "can bootstrap packages" $ do
+                ctx <- loadNotationFiles ctx0 ["test/config/foo.bulktext", "test/config/bar.bulktext", "test/config/foobar.bulktext"]
+                decodeNotation ctx "( version 1 0 ) ( import 20 ( package ( 0x16-00 #[4] 0xB4475636 ) 3 ) ) ( bar:bar ( bar:int 2 ) ( bar:foo ( foo:foo true true 99 ) ) )" `shouldBeRight` [Bar 2 (Foo True True 99)]
             it "has verifiable packages" $ do
                 decodeNotationFile @[()] ctx0 "test/package-bad.bulktext" `shouldReturn` Left "test/package-bad.bulktext: verification failed for package (expected digest 0000000000000000000000000000000000000000000000000000000000000000 but got 7a6dcf4b2cf07e63b60b893c6ac193b55ce38857e18148afc5b113189324747c)"
             it "has lasting namespaces and packages" $ do

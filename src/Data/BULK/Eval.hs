@@ -134,9 +134,9 @@ evalForm (Reference ref : args) = do
         Nothing ->
             evalQualifiedForm
         Just fun -> do
-            result <- runError @TypeMismatch (fun args)
+            result <- runError (fun args)
             case result of
-                Left _ -> evalQualifiedForm
+                Left TypeMismatch -> evalQualifiedForm
                 Right bulk -> pure bulk
 evalForm content =
     Just . Form <$> evalAll content
@@ -172,12 +172,7 @@ coreDefine [Reference ref, expr] =
 coreDefine [Form [Core.Namespace, Form [Reference digestRef, Array nsDigest], Nat marker], Array defBytes] = do
     defineNamespace digestRef nsDigest marker defBytes
 coreDefine [Form [Core.Package, Form [Reference digestRef, Array pkgDigest]], Array defBytes] = do
-    nested <- parseNested defBytes
-    case nested of
-        Form (Nil : nss) ->
-            verifyQualifiedPackage digestRef pkgDigest nss
-        _ ->
-            throw TypeMismatch
+    definePackage digestRef pkgDigest defBytes
 coreDefine _ = throw TypeMismatch
 coreMnemonic [Form [Core.Namespace, Nat marker], mnemonicB] =
     setNSMnemonic marker mnemonicB
@@ -204,21 +199,6 @@ findNS expr = do
 evalExpr1 :: (Members [State Scope, Error String] r) => BULK -> Sem r BULK
 evalExpr1 expr =
     fromMaybe expr <$> evalExpr expr
-
-addPackage :: (Members [State Scope, Error String] r) => NamespaceID -> [BULK] -> Sem r (Maybe BULK)
-addPackage match nss = do
-    foundNSS <- traverse findNS nss
-    notYielding $ modify $ over knownPackages $ S.insert Package{matchID = match, nsIDs = foundNSS}
-
-verifyQualifiedPackage :: (Members [State Scope, Error String] r) => Ref -> ByteString -> [BULK] -> Sem r (Maybe BULK)
-verifyQualifiedPackage digestRef pkgDigest nss = do
-    (qualifiedName, digest) <- retrieveDigest digestRef
-    let reencoded = encode $ Nil : nss
-    case runCheckDigest digest pkgDigest reencoded of
-        Right () -> do
-            addPackage (MatchQualifiedNamePrefix qualifiedName pkgDigest) nss
-        Left err -> do
-            throw [i|verification failed for package (#{err})|]
 
 importPackage :: (Members [State Scope, Error String] r) => Int -> Int -> BULK -> Sem r (Maybe BULK)
 importPackage base count expr = do
@@ -257,12 +237,12 @@ defineBootstrappedNamespace digestRef nsDigest marker toDigest = do
 
 defineQualifiedNamespace :: (Members [State Scope, Error String] r) => Ref -> ByteString -> Int -> ByteString -> Sem r (Maybe BULK)
 defineQualifiedNamespace digestRef nsDigest marker toDigest = do
-    (qualifiedName, digest) <- retrieveDigest digestRef
+    (qualifiedRef, digest) <- retrieveDigest digestRef
     nested <- parseNested toDigest
     case (runCheckDigest digest nsDigest toDigest, nested) of
         (Right (), Form (Nil : defs)) -> notYielding do
             definition <- evalLocalState do
-                let newNS = Namespace{matchID = MatchQualifiedNamePrefix qualifiedName nsDigest, mnemonic = "", names = []}
+                let newNS = Namespace{matchID = MatchQualifiedNamePrefix qualifiedRef nsDigest, mnemonic = "", names = []}
                 knowNS newNS
                 associateNS marker $ Just newNS.matchID
                 traverse_ evalExpr defs
@@ -292,6 +272,23 @@ retrieveDigest :: (Members [State Scope, Error String] r) => Ref -> Sem r (Ref, 
 retrieveDigest name =
     retrieveDefinition _Digest name >>= maybe (throw [i|unknown digest: #{name}|]) pure . sequenceA
 
+definePackage :: (Members [State Scope, Error String] r) => Ref -> ByteString -> ByteString -> Sem r (Maybe BULK)
+definePackage digestRef pkgDigest defBytes = notYielding do
+    (qualifiedRef, digest) <- retrieveDigest digestRef
+    nested <- parseNested defBytes
+    case (runCheckDigest digest pkgDigest defBytes, nested) of
+        (Right (), Form (Nil : nss)) -> notYielding do
+            foundNSS <- traverse findNS nss
+            let pkgID =
+                    if Just qualifiedRef.nsID `elem` foundNSS
+                        then MatchNamePrefix digestRef.name.marker pkgDigest
+                        else MatchQualifiedNamePrefix qualifiedRef pkgDigest
+            modify $ over knownPackages $ S.insert Package{matchID = pkgID, nsIDs = foundNSS}
+        (Right (), bulk) ->
+            throw [i|syntax error in package definition: #{debug bulk}|]
+        (Left err, _bulk) -> do
+            throw [i|verification failed for package (#{err})|]
+
 setNSMnemonic :: (Members [State Scope, Error String] r) => Int -> BULK -> Sem r (Maybe BULK)
 setNSMnemonic marker mnemonicB = notYielding $ do
     mnemonic <- parseText mnemonicB
@@ -320,14 +317,17 @@ matchOn expr thing = runMatchID thing.matchID expr
 runMatchID :: NamespaceID -> BULK -> Bool
 runMatchID (MatchEq bulk1) bulk2 =
     bulk1 == bulk2
-runMatchID (MatchNamePrefix name referenceDigest) (Form [Reference (Ref (UnassociatedNS _) name'), Array targetDigest])
+runMatchID (MatchNamePrefix name fullDigest) (Form [Reference (Ref (UnassociatedNS _) name'), Array targetDigest])
     | name == name'.marker =
-        toStrict targetDigest `isPrefixOf` toStrict referenceDigest
+        toStrict targetDigest `isPrefixOf` toStrict fullDigest
+runMatchID nsID1@(MatchNamePrefix nameMarker1 fullDigest) (Form [Reference (Ref nsID2 name2), Array targetDigest])
+    | nsID1 == nsID2 && nameMarker1 == name2.marker =
+        toStrict targetDigest `isPrefixOf` toStrict fullDigest
 runMatchID (MatchNamePrefix _name _digest) _bulk =
     False
-runMatchID (MatchQualifiedNamePrefix (Ref ns name) referenceDigest) (Form [Reference (Ref ns' name'), Array targetDigest])
+runMatchID (MatchQualifiedNamePrefix (Ref ns name) fullDigest) (Form [Reference (Ref ns' name'), Array targetDigest])
     | ns == ns' && name == name' =
-        toStrict targetDigest `isPrefixOf` toStrict referenceDigest
+        toStrict targetDigest `isPrefixOf` toStrict fullDigest
 runMatchID (MatchQualifiedNamePrefix _name _digest) _bulk =
     False
 runMatchID CoreNS _ =
