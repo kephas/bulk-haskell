@@ -85,13 +85,13 @@ spec = describe "BULK" $ do
         -- Encoding
         describe "encoding" $ do
             it "encodes primitives" $ do
-                encode [Nil, Form [], Array "", IntReference 16 0] `shouldBe` "\x00\x01\x02\xC0\x10\x00"
+                encode [Nil, Form [], Array "", IntReference 16 0] `shouldBeRight` [hex|000102C01000|]
             it "encodes natural numbers" $ do
                 map @Int encodeNat [0, 1, 0xFF, 0x100, 0xFFFF, 0x1_0000] `shouldBe` [Array "\0", Array "\1", Array "\xFF", Array "\1\0", Array "\xFF\xFF", Array "\0\1\0\0"]
                 map @Integer encodeNat [0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF] `shouldBe` [Array [hex|00000000FFFFFFFFFFFFFFFFFFFFFFFF|]]
-                encode [Array "\0", Array "\1", Array "\xFF", Array "\1\0"] `shouldBe` [hex|8081C1FFC20100|]
+                encode [Array "\0", Array "\1", Array "\xFF", Array "\1\0"] `shouldBeRight` [hex|8081C1FFC20100|]
             prop "round-trips arbitrary primitives" $ \expr ->
-                encode [expr] `shouldParseTo` expr
+                shouldParseToItself expr
         --
         -- Text Notation
         describe "text notation" $ do

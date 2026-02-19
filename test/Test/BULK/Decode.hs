@@ -21,7 +21,7 @@ import Test.QuickCheck.Instances.ByteString ()
 import Witch (via)
 import Prelude hiding (words)
 
-import Data.BULK (BULK (Array, Form, Reference), Name (..), Ref (..), Value (..), encode, getExpression, parseLazy, parseNotation, parseStreamV1, toIntegral, _BulkExpr, _Int, _Nat)
+import Data.BULK (BULK (Array, Form, Reference), Name (..), Ref (..), Value (..), encode, getExpression, parseLazy, parseNotation, parseStreamV1, toIntegral, _Int, _Nat)
 import Data.BULK.Debug (Debug (..))
 
 readFailsOn :: Word8 -> Expectation
@@ -33,17 +33,26 @@ shouldFail result = result `shouldSatisfy` isLeft
 test_bigger_arrays_decoding :: Int -> Property
 test_bigger_arrays_decoding size =
     forAll (arraySizedWith size) $ \array ->
-        encode [array] `shouldParseTo` array
+        shouldParseToItself array
+
+shouldParseToItself :: BULK -> Expectation
+shouldParseToItself expr = (encode [expr] >>= parseExpr) `shouldBeRight` expr
 
 parseInts :: (HasCallStack, Integral a, Show a) => [(BULK, ByteString, a)] -> IO ()
 parseInts = traverse_ \(kind, bytes, value) ->
     toIntegral (Form [kind, Array bytes]) `shouldBe` Just value
 
 shouldParseTo :: ByteString -> BULK -> Expectation
-words `shouldParseTo` expr = parseLazy getExpression words `shouldBe` Right expr
+words `shouldParseTo` expr = parseExpr words `shouldBeRight` expr
+
+parseExpr :: ByteString -> Either String BULK
+parseExpr = parseLazy getExpression
+
+tryPrism :: Prism' a b -> Either String a -> Either String b
+tryPrism prism_ = (>>= maybe (Left "can't convert") Right . preview prism_)
 
 shouldParseToPrism :: (Integral a, Bits a, Show a) => Prism' BULK a -> ByteString -> a -> Expectation
-shouldParseToPrism prism_ words num = words ^? _BulkExpr . prism_ `shouldBe` Just num
+shouldParseToPrism prism_ words num = tryPrism prism_ (parseExpr words) `shouldBeRight` num
 
 shouldParseToNat :: (Integral a, Bits a, Show a) => ByteString -> a -> Expectation
 shouldParseToNat = shouldParseToPrism _Nat

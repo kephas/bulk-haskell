@@ -37,6 +37,7 @@ import Witch (from)
 import Data.BULK.Decode (parseStream)
 import Data.BULK.Encode (encodeExpr, encodeNat)
 import Data.BULK.Types (BULK (..), Name (..), NamespaceID (CoreNS), Ref (..), Value (..))
+import Data.BULK.Utils (failLeft)
 import Data.Char (isSpace)
 
 data NotationNS = NotationNS {namespace :: NamespaceID, usedNames :: Map Text Word8, availableNames :: [Word8]}
@@ -96,7 +97,7 @@ symbolP sym word =
 
 nestedP :: Parser BB.Builder
 nestedP = do
-    label "nested BULK" $ between open close $ encodeExpr . Array . BB.toLazyByteString <$> notationP
+    label "nested BULK" $ between open close $ tryEncode =<< Array . BB.toLazyByteString <$> notationP
   where
     open = lexeme $ chunk "(["
     close = chunk "])"
@@ -129,7 +130,7 @@ literalBytesP = do
 
 decimalP :: Parser BB.Builder
 decimalP =
-    encodeExpr . encodeNat <$> (L.decimal :: Parser Int)
+    encodeNat <$> (L.decimal :: Parser Int) >>= tryEncode
 
 quoteP, notQuoteP :: Parser Text
 quoteP = T.singleton <$> single '"'
@@ -137,7 +138,7 @@ notQuoteP = takeWhileP (Just "not quotes") ('"' /=)
 
 stringP :: Parser BB.Builder
 stringP =
-    encodeExpr . Array . LTE.encodeUtf8 . LT.fromStrict <$> between quoteP quoteP notQuoteP
+    Array . LTE.encodeUtf8 . LT.fromStrict <$> between quoteP quoteP notQuoteP >>= tryEncode
 
 referenceP :: Parser BB.Builder
 referenceP = qualified <|> unqualified
@@ -147,11 +148,11 @@ referenceP = qualified <|> unqualified
         void $ single ':'
         name <- mnemonicP
         ref <- ensureRef ns name
-        pure $ encodeExpr ref
+        tryEncode ref
     unqualified = do
         name <- mnemonicP
         ref <- ensureRef "<empty>" name
-        pure $ encodeExpr ref
+        tryEncode ref
 
 mnemonicP :: Parser Text
 mnemonicP = takeWhile1P (Just "mnemonic") \char -> char /= ':' && not (isSpace char)
@@ -217,6 +218,9 @@ hexChars = "0123456789abcdefABCDEF"
 lowHalfBytes, highHalfBytes :: [Word8]
 lowHalfBytes = [0x0 .. 0xF] ++ [0xA .. 0xF]
 highHalfBytes = [0x00, 0x10 .. 0xF0] ++ [0xA0, 0xB0 .. 0xF0]
+
+tryEncode :: BULK -> Parser BB.Builder
+tryEncode = failLeft . encodeExpr
 
 testP :: Parser Int
 testP = choice (zipWith mkParser ["foo-bar", "foo"] [1, 2]) <* eof
