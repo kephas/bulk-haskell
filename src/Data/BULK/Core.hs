@@ -54,10 +54,10 @@ toIntegral bulk =
   where
     int get = eitherToMaybe . fmap fromIntegral . parseLazy get
     bigInt blocks = int (getBlocks blocks 0)
-    getBlocks 1 acc = (acc +) . fromIntegral <$> getInt64be
-    getBlocks blocks _acc = do
-        nextBlock <- getInt64be
-        getBlocks (blocks - 1) $ 2 ^ 64 * fromIntegral nextBlock
+    getBlocks 0 acc = pure acc
+    getBlocks blocks acc = do
+        nextBlock <- fromIntegral <$> getInt64be
+        getBlocks (blocks - 1) $ 2 ^ 64 * acc + nextBlock
 
 pattern ArraySize :: Int64 -> BL.ByteString -> BULK
 pattern ArraySize size array <- (sized -> Just (size, array))

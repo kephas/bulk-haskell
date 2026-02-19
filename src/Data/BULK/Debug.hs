@@ -31,6 +31,7 @@ import Text.Hex qualified as H
 import Witch (from)
 
 import Data.BULK.Types
+import Data.Int (Int64)
 import Data.Maybe (fromMaybe)
 
 class Debug a where
@@ -107,6 +108,8 @@ instance (Debug k, Debug v) => Debug (M.Map k v) where
 instance Debug Int
 
 instance Debug Word8
+
+instance Debug Int64
 
 instance {-# OVERLAPPING #-} Debug [Char] where
     debug = id
