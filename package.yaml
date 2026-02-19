@@ -57,6 +57,8 @@ library:
     - memory
     - mtl
     - parser-combinators
+    - template-haskell
+    - template-haskell-quasiquoter
 
 executables:
   bulk-cli:

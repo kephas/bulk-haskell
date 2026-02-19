@@ -1,6 +1,6 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.37.0.
+-- This file has been generated from package.yaml by hpack version 0.38.2.
 --
 -- see: https://github.com/sol/hpack
 
@@ -33,6 +33,7 @@ library
       Data.BULK.Encode
       Data.BULK.Eval
       Data.BULK.Hash
+      Data.BULK.Hex
       Data.BULK.Lens
       Data.BULK.TextNotation
       Data.BULK.ToFrom
@@ -69,6 +70,8 @@ library
     , polysemy
     , polysemy-plugin
     , string-interpolate
+    , template-haskell
+    , template-haskell-quasiquoter
     , text
     , witch
   default-language: Haskell2010

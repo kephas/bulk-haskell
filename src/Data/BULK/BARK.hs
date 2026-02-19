@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Data.BULK.BARK where
@@ -7,8 +8,8 @@ import Data.ByteString (ByteString)
 import Prelude hiding (words)
 
 import Data.BULK
+import Data.BULK.Hex (hex)
 import Data.BULK.ToFrom (list)
-import Data.BULK.Utils (fromHex)
 import Data.List (uncons)
 import Data.Maybe (fromJust)
 
@@ -34,7 +35,7 @@ instance FromBULK Entry where
 hash0 :: Namespace
 hash0 =
     Namespace
-        { matchID = MatchNamePrefix 0x00 $ fromHex "9DBFD6029C1EBE32EC16749703A283DFC1B47C4E925473435529B5769FD89311"
+        { matchID = MatchNamePrefix 0x00 [hex|9DBFD6029C1EBE32EC16749703A283DFC1B47C4E925473435529B5769FD89311|]
         , mnemonic = "hash0"
         , names = [Name 0x00 (Just "shake128") $ Digest CheckShake128]
         }
@@ -42,7 +43,7 @@ hash0 =
 bark :: Namespace
 bark =
     Namespace
-        { matchID = MatchQualifiedNamePrefix (Ref hash0.matchID $ forceHead hash0.names) $ fromHex "FFF04DBC28671AADCEB008603DFC29B82EEB54CCA5FC25C0C9D64CC926B267A4"
+        { matchID = MatchQualifiedNamePrefix (Ref hash0.matchID $ forceHead hash0.names) [hex|FFF04DBC28671AADCEB008603DFC29B82EEB54CCA5FC25C0C9D64CC926B267A4|]
         , mnemonic = "bark"
         , names = []
         }

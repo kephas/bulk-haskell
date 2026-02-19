@@ -6,20 +6,16 @@
 module Data.BULK.Utils where
 
 import Control.Monad ((>=>))
-import Data.ByteString.Lazy (LazyByteString, fromStrict)
-import Data.Map.Strict as M
-import Data.Maybe (fromJust)
+import Data.Bifunctor (first)
+import Data.Map.Strict qualified as M
 import Data.String.Interpolate (i)
-import Data.Text (Text)
 import GHC.Stack (HasCallStack)
 import Polysemy (InterpreterFor, Member, Sem)
 import Polysemy.Error (Error, runError)
 import Polysemy.Fail (Fail)
 import Polysemy.State (State, evalState, get)
-import Text.Hex qualified as H
 
 import Data.BULK.Types (Namespace (..), NamespaceID, Result (..))
-import Data.Bifunctor (first)
 
 insertIfMissing :: (Ord k) => k -> a -> M.Map k a -> M.Map k a
 insertIfMissing = M.insertWith (\_new old -> old)
@@ -64,6 +60,3 @@ liftFailIn file = liftFail . errIn file
 
 liftFail :: (HasCallStack) => Result a -> IO a
 liftFail = either fail pure . (.unResult)
-
-fromHex :: Text -> LazyByteString
-fromHex = fromStrict . fromJust . H.decodeHex

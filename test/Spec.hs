@@ -23,7 +23,7 @@ import Data.BULK.BARK qualified as BARK
 import Data.BULK.Core qualified as Core
 import Data.BULK.Encode (pattern IntReference)
 import Data.BULK.Eval (mkContext)
-import Data.BULK.Utils (fromHex)
+import Data.BULK.Hex (hex)
 import Test.BULK.Decode
 import Test.BULK.Encode ()
 import Test.QuickCheck.Instances.BULK (simpleBULK)
@@ -39,9 +39,9 @@ spec = describe "BULK" $ do
         describe "decoding" $ do
             describe "primitives" $ do
                 it "reads simple forms" $ do
-                    "\1\2" `shouldParseTo` Form []
-                    "\1\0\2" `shouldParseTo` Form [Nil]
-                    "\1\0\1\0\2\0\2" `shouldParseTo` Form [Nil, Form [Nil], Nil]
+                    [hex|0102|] `shouldParseTo` Form []
+                    [hex|010002|] `shouldParseTo` Form [Nil]
+                    [hex|01000100020002|] `shouldParseTo` Form [Nil, Form [Nil], Nil]
                 describe "arrays" $ do
                     prop "reads small arrays" $ forAll smallArray $ \array ->
                         encodeSmallArray array `shouldParseTo` Array (pack array)
@@ -88,8 +88,8 @@ spec = describe "BULK" $ do
                 encode [Nil, Form [], Array "", IntReference 16 0] `shouldBe` "\x00\x01\x02\xC0\x10\x00"
             it "encodes natural numbers" $ do
                 map @Int encodeNat [0, 1, 0xFF, 0x100, 0xFFFF, 0x1_0000] `shouldBe` [Array "\0", Array "\1", Array "\xFF", Array "\1\0", Array "\xFF\xFF", Array "\0\1\0\0"]
-                map @Integer encodeNat [0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF] `shouldBe` [Array $ fromHex "00000000FFFFFFFFFFFFFFFFFFFFFFFF"]
-                encode [Array "\0", Array "\1", Array "\xFF", Array "\1\0"] `shouldBe` fromHex "8081C1FFC20100"
+                map @Integer encodeNat [0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF] `shouldBe` [Array [hex|00000000FFFFFFFFFFFFFFFFFFFFFFFF|]]
+                encode [Array "\0", Array "\1", Array "\xFF", Array "\1\0"] `shouldBe` [hex|8081C1FFC20100|]
             prop "round-trips arbitrary primitives" $ \expr ->
                 encode [expr] `shouldParseTo` expr
         --
@@ -107,7 +107,7 @@ spec = describe "BULK" $ do
                 "#[0]" `shouldDenote` [Array ""]
                 "#[1] 0xAB" `shouldDenote` [Array "\xAB"]
                 "#[2] 0xCDEF" `shouldDenote` [Array "\xCD\xEF"]
-                "#[16] 0xaf5ac1b8-8e33-4025-97fe-f0e2030a00f7" `shouldDenote` [Array $ fromHex "af5ac1b88e33402597fef0e2030a00f7"]
+                "#[16] 0xaf5ac1b8-8e33-4025-97fe-f0e2030a00f7" `shouldDenote` [Array [hex|af5ac1b88e33402597fef0e2030a00f7|]]
             it "parses small decimals" $ do
                 for_ smallWords $ \word ->
                     [i|#{word}|] `shouldDenote` [Array $ singleton word]
@@ -123,7 +123,7 @@ spec = describe "BULK" $ do
                 parseNotation [i|"foo"|] `shouldBeRight` "\xC3\&foo"
                 parseNotation [i|"foo" "quuux"|] `shouldBeRight` "\xC3\&foo\xC5quuux"
                 parseNotation [i|"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor"|] `shouldBeRight` "\x03\xC1\78Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor"
-                parseNotation [i|"関数型プログラミング"|] `shouldBeRight` "\xDE\233\150\162\230\149\176\229\158\139\227\131\151\227\131\173\227\130\176\227\131\169\227\131\159\227\131\179\227\130\176"
+                parseNotation [i|"関数型プログラミング"|] `shouldBeRight` [hex|DEE996A2E695B0E59E8BE38397E383ADE382B0E383A9E3839FE383B3E382B0|]
             it "parses example files" $ do
                 parseNotationFile "test/bulk/nesting.bulktext" `shouldReturn` nesting
                 parseNotationFile "test/bulk/primitives.bulktext" `shouldReturn` primitives
@@ -197,7 +197,7 @@ spec = describe "BULK" $ do
                 matchTo [([True, False], Form [Core.True, Core.False])]
                 matchTo @ByteString [("", Array ""), ("\0\1\2", Array "\0\1\2")]
             it "encodes UTF-8 strings" $ do
-                matchTo @Text [("foo", Array "foo"), ("γράφω", Array $ fromHex "CEB3CF81CEACCF86CF89")]
+                matchTo @Text [("foo", Array "foo"), ("γράφω", Array [hex|CEB3CF81CEACCF86CF89|])]
 
         --
         -- BARK
@@ -220,12 +220,12 @@ primitives =
             , Form
                 [ Nil
                 , Array "Hello world!"
-                , Array "\x2A"
+                , Array [hex|2A|]
                 , Array ""
-                , Array "\x40"
-                , Array "\x01\x00"
-                , Array "\x01\x00\x00\x00"
-                , Array "\x01\x23\x45\x67\x89\xAB\xCD\xEF"
+                , Array [hex|40|]
+                , Array [hex|0100|]
+                , Array [hex|01000000|]
+                , Array [hex|0123456789ABCDEF|]
                 , IntReference 0x14 0x01
                 , IntReference 0x14 0x02
                 , IntReference 0x7E 0xFF
@@ -236,39 +236,39 @@ badNesting = Left "not enough data (while reading a form)"
 
 parseOnlyIntCases, bidirectionalIntCases :: [(BULK, ByteString, Int)]
 parseOnlyIntCases =
-    [ (Core.UnsignedInt, "\x01", 0x1)
-    , (Core.SignedInt, "\x00\x01", 0x1)
-    , (Core.SignedInt, "\xFF\xFF", -0x1)
-    , (Core.SignedInt, "\x00\x00\x00\x01", 0x1)
-    , (Core.SignedInt, "\xFF\xFF\xFF\xFF", -0x1)
-    , (Core.SignedInt, "\x00\x00\x00\x00\x00\x00\x00\x01", 0x1)
-    , (Core.SignedInt, "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF", -0x1)
+    [ (Core.UnsignedInt, [hex|01|], 0x1)
+    , (Core.SignedInt, [hex|0001|], 0x1)
+    , (Core.SignedInt, [hex|FFFF|], -0x1)
+    , (Core.SignedInt, [hex|00000001|], 0x1)
+    , (Core.SignedInt, [hex|FFFFFFFF|], -0x1)
+    , (Core.SignedInt, [hex|0000000000000001|], 0x1)
+    , (Core.SignedInt, [hex|FFFFFFFFFFFFFFFF|], -0x1)
     ]
 bidirectionalIntCases =
-    [ (Core.SignedInt, "\x01", 0x1)
-    , (Core.SignedInt, "\x7F", 0x7F)
-    , (Core.SignedInt, "\xFF", -0x1)
-    , (Core.SignedInt, "\x80", -0x80)
-    , (Core.SignedInt, "\x81", -0x7F)
-    , (Core.SignedInt, "\x7F\xFF", 0x7FFF)
-    , (Core.SignedInt, "\x80\x00", -0x8000)
-    , (Core.SignedInt, "\x80\x01", -0x7FFF)
-    , (Core.SignedInt, "\x7F\xFF\xFF\xFF", 0x7FFF_FFFF)
-    , (Core.SignedInt, "\x80\x00\x00\x00", -0x8000_0000)
-    , (Core.SignedInt, "\x80\x00\x00\x01", -0x7FFF_FFFF)
-    , (Core.SignedInt, "\x7F\xFF\xFF\xFF\xFF\xFF\xFF\xFF", 0x7FFF_FFFF_FFFF_FFFF)
-    , (Core.SignedInt, "\x80\x00\x00\x00\x00\x00\x00\x00", -0x8000_0000_0000_0000)
-    , (Core.SignedInt, "\x80\x00\x00\x00\x00\x00\x00\x01", -0x7FFF_FFFF_FFFF_FFFF)
+    [ (Core.SignedInt, [hex|01|], 0x1)
+    , (Core.SignedInt, [hex|7F|], 0x7F)
+    , (Core.SignedInt, [hex|FF|], -0x1)
+    , (Core.SignedInt, [hex|80|], -0x80)
+    , (Core.SignedInt, [hex|81|], -0x7F)
+    , (Core.SignedInt, [hex|7FFF|], 0x7FFF)
+    , (Core.SignedInt, [hex|8000|], -0x8000)
+    , (Core.SignedInt, [hex|8001|], -0x7FFF)
+    , (Core.SignedInt, [hex|7FFFFFFF|], 0x7FFF_FFFF)
+    , (Core.SignedInt, [hex|80000000|], -0x8000_0000)
+    , (Core.SignedInt, [hex|80000001|], -0x7FFF_FFFF)
+    , (Core.SignedInt, [hex|7FFFFFFFFFFFFFFF|], 0x7FFF_FFFF_FFFF_FFFF)
+    , (Core.SignedInt, [hex|8000000000000000|], -0x8000_0000_0000_0000)
+    , (Core.SignedInt, [hex|8000000000000001|], -0x7FFF_FFFF_FFFF_FFFF)
     ]
 
 bigIntCases :: [(BULK, ByteString, Integer)]
 bigIntCases =
-    [(Core.SignedInt, "\x80\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00", -0x8000_0000_0000_0000_0000_0000_0000_0000)]
+    [(Core.SignedInt, [hex|80000000000000000000000000000000|], -0x8000_0000_0000_0000_0000_0000_0000_0000)]
 
 hash0 :: Namespace
 hash0 =
     Namespace
-        { matchID = MatchNamePrefix 0x00 $ fromHex "9DBFD6029C1EBE32EC16749703A283DFC1B47C4E925473435529B5769FD89311"
+        { matchID = MatchNamePrefix 0x00 [hex|9DBFD6029C1EBE32EC16749703A283DFC1B47C4E925473435529B5769FD89311|]
         , mnemonic = "hash0"
         , names = [Name 0x00 (Just "shake128") $ Digest CheckShake128]
         }
@@ -282,7 +282,7 @@ ctx0 = mkContext [hash0]
 foo :: Namespace
 foo =
     Namespace
-        { matchID = MatchQualifiedNamePrefix shake128 $ fromHex "37B6D2582C3A962E2CDB2BF89C47D17179D6F1A3425E73A32010C0CA32AC55BA"
+        { matchID = MatchQualifiedNamePrefix shake128 [hex|37B6D2582C3A962E2CDB2BF89C47D17179D6F1A3425E73A32010C0CA32AC55BA|]
         , mnemonic = "foo"
         , names = []
         }
@@ -290,7 +290,7 @@ foo =
 bar :: Namespace
 bar =
     Namespace
-        { matchID = MatchQualifiedNamePrefix shake128 $ fromHex "14AE0706F60122731B16D0D5A882C5ACEC93C907C5A84EB65ECB3A5E1167BBEB"
+        { matchID = MatchQualifiedNamePrefix shake128 [hex|14AE0706F60122731B16D0D5A882C5ACEC93C907C5A84EB65ECB3A5E1167BBEB|]
         , mnemonic = "bar"
         , names = []
         }
