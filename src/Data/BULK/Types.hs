@@ -80,6 +80,8 @@ data Scope = Scope
 
 data TypeMismatch = TypeMismatch
 
+newtype Warning = Warning {unWarning :: String}
+
 newtype Result a = Result {unResult :: Either String a}
     deriving newtype (Eq, Ord, Show, Functor, Applicative, Monad)
 

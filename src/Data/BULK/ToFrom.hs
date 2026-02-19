@@ -12,7 +12,7 @@
 
 module Data.BULK.ToFrom where
 
-import Control.Monad (foldM, (<=<), (>=>))
+import Control.Monad (foldM, (>=>))
 import Data.ByteString (StrictByteString, toStrict)
 import Data.ByteString.Lazy (ByteString)
 import Data.ByteString.Lazy qualified as B
@@ -22,7 +22,8 @@ import Data.Text.Encoding (encodeUtf8)
 import GHC.Stack (HasCallStack)
 import Polysemy (Sem, raise, run)
 import Polysemy.Error (Error)
-import Polysemy.Fail (Fail, runFail)
+import Polysemy.Fail (Fail, failToError)
+import Polysemy.Output (Output)
 import Polysemy.State (State, evalState, get, put)
 import Witch (from)
 
@@ -31,10 +32,10 @@ import Data.BULK.Core qualified as Core
 import Data.BULK.Debug (debug)
 import Data.BULK.Decode (parseStream)
 import Data.BULK.Encode (encodeNat, pattern Nat)
-import Data.BULK.Eval (eval, evalExpr, execContext, mkContext, parseText)
+import Data.BULK.Eval (emptyScope, evalCtx, evalExpr, execContext, mkContext, parseText)
 import Data.BULK.TextNotation (parseNotation, parseNotationFile)
-import Data.BULK.Types (BULK (..), Context (..), MatchBULK (..), Name (..), Namespace (..), Ref (..))
-import Data.BULK.Utils (failLeftIn, leftIn, runErrorToFail)
+import Data.BULK.Types (BULK (..), Context (..), MatchBULK (..), Name (..), Namespace (..), Ref (..), Scope, Warning)
+import Data.BULK.Utils (failLeftIn, leftIn, runWarningsAndError)
 
 class FromBULK a where
     parseBULK :: BULK -> Parser a
@@ -46,7 +47,7 @@ fromBULK :: (FromBULK a) => BULK -> Either String a
 fromBULK = fromBULKWith $ mkContext []
 
 fromBULKWith :: (FromBULK a) => Context -> BULK -> Either String a
-fromBULKWith ctx = runParser . parseBULK <=< eval ctx
+fromBULKWith ctx bulk = runParser $ evalCtx ctx bulk >>= parseBULK
 
 decode :: (FromBULK a) => Context -> ByteString -> Either String a
 decode ctx = parseStream >=> fromBULKWith ctx
@@ -111,7 +112,7 @@ list = do
             traverse parseBULK xs
 
 parseString :: BULK -> Parser String
-parseString bulk = runErrorToFail $ unpack <$> parseText bulk
+parseString bulk = unpack <$> parseText bulk
 
 string :: Parser String
 string = withNext parseString
@@ -142,10 +143,10 @@ instance FromBULK BULK where
 instance (FromBULK a) => FromBULK [a] where
     parseBULK = withSequence list
 
-type Parser a = Sem '[State (Maybe [BULK]), Error String, Fail] a
+type Parser a = Sem '[State (Maybe [BULK]), State Scope, Fail, Error String, Output Warning] a
 
 runParser :: Parser a -> Either String a
-runParser = run . runFail . runErrorToFail . evalState Nothing
+runParser = run . runWarningsAndError . failToError id . evalState emptyScope . evalState Nothing
 
 nsName :: Namespace -> Text -> MatchBULK
 nsName ns1@(Namespace{mnemonic}) mnemonic1 =

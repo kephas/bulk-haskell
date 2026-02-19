@@ -130,5 +130,8 @@ instance Debug Value where
     debug (Digest digest) = [i|=~#{digest}|]
     debug (LazyFunction f) = [i|=#{f}()|]
 
+instance Debug Warning where
+    debug (Warning w) = w
+
 detraceState :: (Member (State s) r, Debug s) => Sem r ()
 detraceState = get >>= traceM . debug
