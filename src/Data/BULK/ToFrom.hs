@@ -32,9 +32,9 @@ import Data.BULK.Core qualified as Core
 import Data.BULK.Debug (debug)
 import Data.BULK.Decode (parseStream)
 import Data.BULK.Encode (encodeNat, pattern Nat)
-import Data.BULK.Eval (emptyScope, evalCtx, evalExpr, execContext, mkContext, parseText)
+import Data.BULK.Eval (eval, evalExpr, execContext, mkContext, parseText)
 import Data.BULK.TextNotation (parseNotation, parseNotationFile)
-import Data.BULK.Types (BULK (..), Context (..), MatchBULK (..), Name (..), Namespace (..), Ref (..), Scope, Warning)
+import Data.BULK.Types (BULK (..), Context (..), MatchBULK (..), Name (..), Namespace (..), Ref (..), Warning)
 import Data.BULK.Utils (failLeftIn, leftIn, runWarningsAndError)
 
 class FromBULK a where
@@ -47,7 +47,7 @@ fromBULK :: (FromBULK a) => BULK -> Either String a
 fromBULK = fromBULKWith $ mkContext []
 
 fromBULKWith :: (FromBULK a) => Context -> BULK -> Either String a
-fromBULKWith ctx bulk = runParser $ evalCtx ctx bulk >>= parseBULK
+fromBULKWith ctx bulk = runParser $ eval ctx bulk >>= parseBULK
 
 decode :: (FromBULK a) => Context -> ByteString -> Either String a
 decode ctx = parseStream >=> fromBULKWith ctx
@@ -143,10 +143,10 @@ instance FromBULK BULK where
 instance (FromBULK a) => FromBULK [a] where
     parseBULK = withSequence list
 
-type Parser a = Sem '[State (Maybe [BULK]), State Scope, Fail, Error String, Output Warning] a
+type Parser a = Sem '[State (Maybe [BULK]), Fail, Error String, Output Warning] a
 
 runParser :: Parser a -> Either String a
-runParser = run . runWarningsAndError . failToError id . evalState emptyScope . evalState Nothing
+runParser = run . runWarningsAndError . failToError id . evalState Nothing
 
 nsName :: Namespace -> Text -> MatchBULK
 nsName ns1@(Namespace{mnemonic}) mnemonic1 =

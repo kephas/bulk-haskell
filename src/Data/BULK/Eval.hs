@@ -12,7 +12,7 @@
 {-# LANGUAGE TypeOperators #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Data.BULK.Eval (eval, evalCtx, mkContext, emptyScope, evalExpr, execContext, parseText) where
+module Data.BULK.Eval (eval, mkContext, emptyScope, evalExpr, execContext, parseText) where
 
 import Control.Lens (Prism', at, over, preview, to, view, (^.), (^?), _Just)
 import Control.Monad.Extra (whenJust)
@@ -41,17 +41,11 @@ import Data.BULK.Types qualified as Fun (LazyFunction (..))
 import Data.BULK.Types qualified as N (Name (..))
 import Data.BULK.Types qualified as NS (Namespace (..))
 import Data.BULK.Utils (bareNS, evalLocalState, insertIfMissing, runLocalState, runWarningsAndError, (<$$$>))
-import Polysemy.Output (Output, ignoreOutput, output)
+import Polysemy.Output (Output, output)
 import Witch (from)
 
-eval :: Context -> BULK -> Either String BULK
-eval ctx =
-    runEval . evalCtx ctx
-  where
-    runEval = run . ignoreOutput . runError . evalState emptyScope
-
-evalCtx :: (Members [State Scope, Error String, Output Warning] r) => Context -> BULK -> Sem r BULK
-evalCtx ctx bulk = do
+eval :: (Members [Error String, Output Warning] r) => Context -> BULK -> Sem r BULK
+eval ctx bulk = evalState emptyScope do
     put $ from ctx
     evalExpr bulk >>= maybe (error "nothing yielded") pure
 

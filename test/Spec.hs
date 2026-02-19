@@ -24,8 +24,7 @@ import Data.BULK.Core qualified as Core
 import Data.BULK.Encode (pattern IntReference)
 import Data.BULK.Eval (mkContext)
 import Data.BULK.Hex (hex)
-import Test.BULK.Decode
-import Test.BULK.Encode ()
+import Test.BULK
 import Test.QuickCheck.Instances.BULK (simpleBULK)
 
 main :: IO ()
@@ -146,7 +145,7 @@ spec = describe "BULK" $ do
                 let refs = map fst rvs
                     values = map snd rvs
                     definitions = zipWith define refs values
-                pure $ eval' (Form $ definitions ++ refs) `shouldBeRight` Form values
+                pure $ fromBULK (Form $ definitions ++ refs) `shouldBeRight` Form values
             it "respect scoping rule" do
                 shouldFail $ decodeNotation @[[Int]] (mkContext []) "( ( bulk:define 0x1400 42 ) 0x1400 ) ( 0x1400 )"
             describe "parses numbers" $ do
@@ -212,7 +211,7 @@ spec = describe "BULK" $ do
     describe "slow tests" $ do
         prop "reads really big generic arrays" $ test_bigger_arrays_decoding 3
         prop "has self-evaluating expressions" $ forAll (vectorOf 8 simpleBULK) $ \exprs ->
-            eval' (Form exprs) `shouldBeRight` Form exprs
+            fromBULK (Form exprs) `shouldBeRight` Form exprs
 
 nesting, primitives, badNesting :: Either String BULK
 nesting = Right $ Form [version 1 0, Form [], Form [Nil, Form [Nil], Form []]]
@@ -313,9 +312,6 @@ data Bar = Bar Int Foo deriving (Eq, Show)
 instance FromBULK Bar where
     parseBULK = bar <*:> "bar" $ do
         Bar <$> (bar <:> "int") nextBULK <*> (bar <:> "foo") nextBULK
-
-eval' :: BULK -> Either String BULK
-eval' = eval (mkContext [])
 
 matchTo :: (HasCallStack, ToBULK a) => [(a, BULK)] -> IO ()
 matchTo = traverse_ (uncurry $ shouldBe . toBULK)

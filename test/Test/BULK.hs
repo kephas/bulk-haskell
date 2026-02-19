@@ -1,8 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeApplications #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
-module Test.BULK.Decode where
+module Test.BULK where
 
 import Control.Exception (ErrorCall, assert, handle)
 import Control.Lens hiding (cons, from)
@@ -21,7 +23,7 @@ import Test.QuickCheck.Instances.ByteString ()
 import Witch (via)
 import Prelude hiding (words)
 
-import Data.BULK (BULK (Array, Form, Reference), Name (..), Ref (..), Value (..), encode, getExpression, parseLazy, parseNotation, parseStreamV1, toIntegral, _Int, _Nat)
+import Data.BULK (BULK (Array, Form, Reference), Name (..), Ref (..), Value (..), encode, encodeNat, getExpression, parseLazy, parseNotation, parseStreamV1, toIntegral, _Int, _Nat, pattern Nat)
 import Data.BULK.Debug (Debug (..))
 
 readFailsOn :: Word8 -> Expectation
@@ -136,3 +138,21 @@ reservedMarkers = [0x04 .. 0x0F]
 
 smallWords :: [Word8]
 smallWords = [0 .. 63]
+
+-- Bogus Num instance for tests
+
+instance Num BULK where
+    (+) = nat2 (+)
+    (-) = nat2 (-)
+    (*) = nat2 (*)
+    abs = nat1 abs
+    signum = nat1 signum
+    negate = nat1 negate
+    fromInteger = encodeNat
+
+nat2 :: (Integer -> Integer -> Integer) -> BULK -> BULK -> BULK
+nat2 op2 (Nat x) (Nat y) = Nat $ op2 x y
+nat2 _op2 bulk1 _bulk2 = bulk1
+
+nat1 :: (Integer -> Integer) -> BULK -> BULK
+nat1 f bulk = bulk & _Nat %~ f
