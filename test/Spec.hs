@@ -66,13 +66,13 @@ spec = describe "BULK" $ do
                     traverse_ readFailsOn reservedMarkers
             describe "files" $ do
                 it "reads simple files" $ do
-                    readFile "test/nesting.bulk" `shouldReturn` nesting
-                    readFile "test/primitives.bulk" `shouldReturn` primitives
+                    readFile "test/bulk/nesting.bulk" `shouldReturn` nesting
+                    readFile "test/bulk/primitives.bulk" `shouldReturn` primitives
                 it "reports bad syntax" $ do
-                    readFile "test/bad nesting.bulk" `shouldReturn` badNesting
+                    readFile "test/bulk/bad nesting.bulk" `shouldReturn` badNesting
                 it "checks for version 1.0" $ do
-                    readFile "test/missing version.bulk" `shouldReturn` Left "missing version"
-                    readFileV1 "test/missing version.bulk" `shouldReturnRight` Form [Nil]
+                    readFile "test/bulk/missing version.bulk" `shouldReturn` Left "missing version"
+                    readFileV1 "test/bulk/missing version.bulk" `shouldReturnRight` Form [Nil]
             describe "version and profile" $ do
                 it "checks for version 1.0" $ do
                     parseStream "\x01\x10\x00\x81\x80\x02" `shouldBeRight` Form [Form [IntReference 16 0, 1, 0]]
@@ -125,15 +125,15 @@ spec = describe "BULK" $ do
                 parseNotation [i|"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor"|] `shouldBeRight` "\x03\xC1\78Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor"
                 parseNotation [i|"関数型プログラミング"|] `shouldBeRight` "\xDE\233\150\162\230\149\176\229\158\139\227\131\151\227\131\173\227\130\176\227\131\169\227\131\159\227\131\179\227\130\176"
             it "parses example files" $ do
-                parseNotationFile "test/nesting.bulktext" `shouldReturn` nesting
-                parseNotationFile "test/primitives.bulktext" `shouldReturn` primitives
-                parseNotationFile "test/bad nesting.bulktext" `shouldReturn` badNesting
+                parseNotationFile "test/bulk/nesting.bulktext" `shouldReturn` nesting
+                parseNotationFile "test/bulk/primitives.bulktext" `shouldReturn` primitives
+                parseNotationFile "test/bulk/bad nesting.bulktext" `shouldReturn` badNesting
             it "parses unknown references" $ do
                 "foo:bar quux:one foo:baz" `shouldDenote` (uncurry IntReference <$> [(0x14, 0), (0x15, 0), (0x14, 1)])
                 "123:one" `shouldDenote` [IntReference 0x14 0]
             it "uses known mnemonics" $ do
-                ctx <- loadNotationFiles ctx0 ["test/123.bulktext"]
-                decodeNotationFile @[Int] ctx "test/321.bulktext" `shouldReturnRight` [1]
+                ctx <- loadNotationFiles ctx0 ["test/bulk/123.bulktext"]
+                decodeNotationFile @[Int] ctx "test/bulk/321.bulktext" `shouldReturnRight` [1]
             it "parses nested BULK" $ do
                 "([ nil ])" `shouldDenote` [Array "\0"]
                 "nil ([ nil ]) nil" `shouldDenote` [Nil, Array "\0", Nil]
@@ -161,30 +161,30 @@ spec = describe "BULK" $ do
                     for_ bidirectionalIntCases \(kind, bytes, value) ->
                         encodeInt value `shouldBe` Form [kind, Array bytes]
             it "has verifiable namespaces" $ do
-                decodeNotationFile @[()] ctx0 "test/123-bad.bulktext" `shouldReturn` Left "test/123-bad.bulktext: verification failed for namespace (expected digest 0000000000000000000000000000000000000000000000000000000000000000 but got 95e18ecbe701c53459dfc27e816468fe36830996b9b0e9aac7036910a97c8ed7)"
-                decodeNotationFile @[()] ctx0 "test/123-pre.bulktext" `shouldReturn` Left "test/123-pre.bulktext: verification failed for namespace (missing digest c5c166207da1eecf5d5683ead12647f740a6fe69d51fb3a26719f77b005f0984)"
-                decodeNotationFile @[Int] ctx0 "test/123.bulktext" `shouldReturnRight` [1, 2, 3]
+                decodeNotationFile @[()] ctx0 "test/bulk/123-bad.bulktext" `shouldReturn` Left "test/bulk/123-bad.bulktext: verification failed for namespace (expected digest 0000000000000000000000000000000000000000000000000000000000000000 but got 95e18ecbe701c53459dfc27e816468fe36830996b9b0e9aac7036910a97c8ed7)"
+                decodeNotationFile @[()] ctx0 "test/bulk/123-pre.bulktext" `shouldReturn` Left "test/bulk/123-pre.bulktext: verification failed for namespace (missing digest c5c166207da1eecf5d5683ead12647f740a6fe69d51fb3a26719f77b005f0984)"
+                decodeNotationFile @[Int] ctx0 "test/bulk/123.bulktext" `shouldReturnRight` [1, 2, 3]
             it "can bootstrap hashing" $ do
-                decodeNotationFile @[()] ctx0 "test/bootstrap-bad.bulktext" `shouldReturn` Left "test/bootstrap-bad.bulktext: unable to bootstrap namespace: bootstrap"
+                decodeNotationFile @[()] ctx0 "test/bulk/bootstrap-bad.bulktext" `shouldReturn` Left "test/bulk/bootstrap-bad.bulktext: unable to bootstrap namespace: bootstrap"
                 decodeNotationFile @[()] ctx0 "config/hash0.bulktext" `shouldReturnRight` []
             it "can bootstrap packages" $ do
-                ctx <- loadNotationFiles ctx0 ["test/config/foo.bulktext", "test/config/bar.bulktext", "test/config/foobar.bulktext"]
+                ctx <- loadNotationFiles ctx0 ["test/bulk/config/foo.bulktext", "test/bulk/config/bar.bulktext", "test/bulk/config/foobar.bulktext"]
                 decodeNotation ctx "( version 1 0 ) ( import 20 ( package ( 0x16-00 #[4] 0xB4475636 ) 3 ) ) ( bar:bar ( bar:int 2 ) ( bar:foo ( foo:foo true true 99 ) ) )" `shouldBeRight` [Bar 2 (Foo True True 99)]
             it "has verifiable packages" $ do
-                decodeNotationFile @[()] ctx0 "test/package-bad.bulktext" `shouldReturn` Left "test/package-bad.bulktext: verification failed for package (expected digest 0000000000000000000000000000000000000000000000000000000000000000 but got 7a6dcf4b2cf07e63b60b893c6ac193b55ce38857e18148afc5b113189324747c)"
+                decodeNotationFile @[()] ctx0 "test/bulk/package-bad.bulktext" `shouldReturn` Left "test/bulk/package-bad.bulktext: verification failed for package (expected digest 0000000000000000000000000000000000000000000000000000000000000000 but got 7a6dcf4b2cf07e63b60b893c6ac193b55ce38857e18148afc5b113189324747c)"
 
         --
         -- Parser monad
         describe "Parser monad" $ do
             it "parses Haskell values" $ do
-                ctx <- loadNotationFiles ctx0 ["test/config/foo.bulktext", "test/config/bar.bulktext", "test/config/foobar.bulktext"]
+                ctx <- loadNotationFiles ctx0 ["test/bulk/config/foo.bulktext", "test/bulk/config/bar.bulktext", "test/bulk/config/foobar.bulktext"]
                 decodeNotation ctx "( version 1 0 ) ( import 20 ( namespace ( hash0:shake128 #[4] 0x9DBFD602 ) ) ) ( import 21 ( namespace ( hash0:shake128 #[4] 0x37B6D258 ) ) ) ( foo:foo false true 42 )" `shouldBeRight` [Foo False True 42]
                 decodeNotation @[Foo] ctx "( import 20 ( namespace ( hash0:shake128 #[4] 0x9DBFD602 ) ) ) ( import 21 ( namespace ( hash0:shake128 #[4] 0x37B6D258 ) ) ) ( foo:foo false true 42 )" `shouldBe` Left "missing version"
                 decodeNotation @[Foo] ctx "( version 1 0 ) ( import 20 ( namespace ( hash0:shake128 #[4] 0x9DBFD602 ) ) ) ( import 21 ( namespace ( hash0:shake128 #[4] 0x37B6D258 ) ) ) ( foo:foo false true nil )" `shouldBe` Left "cannot parse as integer: nil"
                 decodeNotation @[Foo] ctx "( version 1 0 ) ( import 20 ( namespace ( hash0:shake128 #[4] 0x9DBFD602 ) ) ) ( import 21 ( namespace ( hash0:shake128 #[4] 0x37B6D258 ) ) ) ( foo:foo false true )" `shouldBe` Left "no next BULK expression"
-                decodeFile ctx "test/foo.bulk" `shouldReturnRight` [Foo False True 42]
-                decodeFile ctx "test/foos.bulk" `shouldReturnRight` [Foo True True 1, Foo True False 1, Foo False True 2, Foo False False 3, Foo True True 5, Foo False False 8]
-                decodeNotationFile ctx "test/foos.bulktext" `shouldReturnRight` [Foo True True 1, Foo True False 1, Foo False True 2, Foo False False 3, Foo True True 5, Foo False False 8]
+                decodeFile ctx "test/bulk/foo-1.bulk" `shouldReturnRight` [Foo False True 42]
+                decodeFile ctx "test/bulk/foo-list.bulk" `shouldReturnRight` [Foo True True 1, Foo True False 1, Foo False True 2, Foo False False 3, Foo True True 5, Foo False False 8]
+                decodeNotationFile ctx "test/bulk/foo-list.bulktext" `shouldReturnRight` [Foo True True 1, Foo True False 1, Foo False True 2, Foo False False 3, Foo True True 5, Foo False False 8]
                 decodeNotation ctx "( version 1 0 ) ( import 20 ( namespace ( hash0:shake128 #[4] 0x9DBFD602 ) ) ) ( import 21 ( namespace ( hash0:shake128 #[4] 0x14AE0706 ) ) )  ( import 22 ( namespace ( hash0:shake128 #[4] 0x37B6D258 ) ) ) ( bar:bar ( bar:int 1 ) ( bar:foo ( foo:foo false true 42 ) ) )" `shouldBeRight` [Bar 1 (Foo False True 42)]
                 decodeNotation ctx "( version 1 0 ) ( import 20 ( namespace ( hash0:shake128 #[4] 0x9DBFD602 ) ) ) ( define ( package ( hash0:shake128 #[4] 0x3C20F61C ) ) ([ nil ( hash0:shake128 #[4] 0x14AE0706 ) ( hash0:shake128 #[4] 0x37B6D258 ) ]) ) ( import 21 2 ( hash0:shake128 #[4] 0x3C20F61C ) ) ( bar:bar ( bar:int 1 ) ( bar:foo ( foo:foo false true 42 ) ) )" `shouldBeRight` [Bar 1 (Foo False True 42)]
 
@@ -203,8 +203,8 @@ spec = describe "BULK" $ do
         -- BARK
         describe "BARK" $ do
             it "reads a manifest" $ do
-                ctx <- loadNotationFiles ctx0 ["test/config/bark-alpha.bulktext"]
-                decodeNotationFile ctx "test/manifest.bulktext" `shouldReturnRight` BARK.BARK [BARK.Description "foo" "0000"]
+                ctx <- loadNotationFiles ctx0 ["test/bulk/config/bark-alpha.bulktext"]
+                decodeNotationFile ctx "test/bulk/manifest.bulktext" `shouldReturnRight` BARK.BARK [BARK.Description "foo" "0000"]
 
     describe "slow tests" $ do
         prop "reads really big generic arrays" $ test_bigger_arrays_decoding 3
