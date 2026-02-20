@@ -14,7 +14,12 @@ import Data.BULK
 newtype BARK = BARK [Entry]
     deriving (Eq, Show)
 
-data Entry = Description {path :: FilePath, shake128 :: ByteString}
+data Entry = Description {path :: FilePath, hash :: Hash}
+    deriving (Eq, Show)
+
+data Hash
+    = Shake128 ByteString
+    | MD5 ByteString
     deriving (Eq, Show)
 
 instance FromBULK BARK where
@@ -27,8 +32,15 @@ instance FromBULK Entry where
             bark <:> "metadata" $ do
                 path <- bark <:> "about" $ do
                     bark <:> "path" $ string
-                shake128 <- bark <:> "hash" $ nextBULK
+                hash <- bark <:> "hash" $ nextBULK
                 pure Description{..}
+
+instance FromBULK Hash where
+    parseBULK =
+        withFormCase
+            [ (bark .: "shake128", Shake128 <$> nextBULK)
+            , (bark .: "md5", MD5 <$> nextBULK)
+            ]
 
 hash0 :: Namespace
 hash0 =
@@ -41,7 +53,7 @@ hash0 =
 bark :: Namespace
 bark =
     Namespace
-        { matchID = MatchQualifiedNamePrefix (Ref hash0.matchID $ forceHead hash0.names) [hex|FFF04DBC28671AADCEB008603DFC29B82EEB54CCA5FC25C0C9D64CC926B267A4|]
+        { matchID = MatchQualifiedNamePrefix (Ref hash0.matchID $ forceHead hash0.names) [hex|F83B2E34FC34C4C4AD942590FB1BE40B206D9275353BE75CA9B3835B28C48B2F|]
         , mnemonic = "bark"
         , names = []
         }

@@ -205,7 +205,7 @@ spec = describe "BULK" $ do
         describe "BARK" $ do
             it "reads a manifest" $ do
                 ctx <- loadNotationFiles ctx0 ["test/bulk/config/bark-alpha.bulktext"]
-                decodeNotationFile ctx "test/bulk/manifest.bulktext" `shouldReturnRight` BARK.BARK [BARK.Description "foo" "0000"]
+                decodeNotationFile ctx "test/bulk/manifest.bulktext" `shouldReturnRight` BARK.BARK [BARK.Description "nesting.bulk" $ BARK.Shake128 "0000", BARK.Description "primitives.bulk" $ BARK.Shake128 "0000", BARK.Description "missing version.bulk" $ BARK.MD5 [hex|93B885ADFE0DA089CDF634904FD59F71|]]
 
     describe "slow tests" $ do
         prop "reads really big generic arrays" $ test_bigger_arrays_decoding 3

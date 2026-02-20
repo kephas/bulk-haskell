@@ -9,6 +9,6 @@ import Data.BULK.Decode as Reexport (VersionConstraint (..), getExpression, getS
 import Data.BULK.Encode as Reexport (encode, encodeNat, pattern Nat)
 import Data.BULK.Lens as Reexport (_Array, _Form, _Int, _Nat, _Nil, _Reference)
 import Data.BULK.TextNotation as Reexport (parseNotation, parseNotationFile, parseNotationFileBin, readTextFile)
-import Data.BULK.ToFrom as Reexport (FromBULK (..), ToBULK (..), decode, decodeFile, decodeNotation, decodeNotationFile, fromBULK, list, loadNotationFiles, nextBULK, nsName, string, withForm, withSequence, withStream, (<*:>), (<:>))
+import Data.BULK.ToFrom as Reexport (FromBULK (..), ToBULK (..), decode, decodeFile, decodeNotation, decodeNotationFile, fromBULK, list, loadNotationFiles, nextBULK, string, withForm, withFormCase, withSequence, withStream, (.:), (<*:>), (<:>))
 import Data.BULK.Types as Reexport (BULK (..), CheckDigest (..), Context, Name (..), Namespace (..), NamespaceID (..), Ref (..), Value (..))
 import Data.BULK.Utils as Reexport (hex)

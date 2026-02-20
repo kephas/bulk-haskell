@@ -1,7 +1,15 @@
 ( version 1 0 )
-( import 20 ( package ( hash0:shake128 #[8] 0x1271AB627383670E ) 2 ) )
+( import 20 ( package ( hash0:shake128 #[8] 0x0C029B183FBFA42D ) 2 ) )
 bark:bark
 ( bark:description
  ( bark:metadata
-  ( bark:about ( bark:path "foo" ) )
-  ( bark:hash #[4] 0x30303030 ) ) )
+  ( bark:about ( bark:path "nesting.bulk" ) )
+  ( bark:hash ( bark:shake128 #[4] 0x30303030 ) ) ) )
+( bark:description
+ ( bark:metadata
+  ( bark:about ( bark:path "primitives.bulk" ) )
+  ( bark:hash ( bark:shake128 #[4] 0x30303030 ) ) ) )
+( bark:description
+ ( bark:metadata
+  ( bark:about ( bark:path "missing version.bulk" ) )
+  ( bark:hash ( bark:md5 #[16] 0x93B885ADFE0DA089CDF634904FD59F71 ) ) ) )

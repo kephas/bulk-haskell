@@ -71,16 +71,24 @@ loadNotationFiles = foldM loadNotationFile
         failLeftIn file $ execContext $ put (from ctx) >> evalExpr bulk
 
 (<*:>) :: Namespace -> Text -> Parser a -> BULK -> Parser a
-ns <*:> name = withForm (nsName ns name)
+ns <*:> name = withForm (ns .: name)
 
 (<:>) :: Namespace -> Text -> Parser a -> Parser a
-ns <:> name = withNext . withForm (nsName ns name)
+ns <:> name = withNext . withForm (ns .: name)
 
 withForm :: MatchBULK -> Parser a -> BULK -> Parser a
 withForm MatchBULK{..} parser (Form (op : content))
     | match op = raise $ evalState (Just content) parser
     | otherwise = fail [i|not the expected operator: (#{debug op}) (expected (#{expected}))|]
 withForm _ref _parser bulk = notExpected "form" bulk
+
+withFormCase :: [(MatchBULK, Parser a)] -> BULK -> Parser a
+withFormCase [] _bulk = fail "nothing matched"
+withFormCase ((matcher, parser) : rest) bulk@(Form (op : content)) =
+    if matcher.match op
+        then raise $ evalState (Just content) parser
+        else withFormCase rest bulk
+withFormCase _matchers bulk = notExpected "form" bulk
 
 withNext :: (BULK -> Parser a) -> Parser a
 withNext = (nextBULK >>=)
@@ -148,8 +156,8 @@ type Parser a = Sem '[State (Maybe [BULK]), Fail, Error String, Output Warning] 
 runParser :: Parser a -> Either String a
 runParser = run . runWarningsAndError . failToError id . evalState Nothing
 
-nsName :: Namespace -> Text -> MatchBULK
-nsName ns1@(Namespace{mnemonic}) mnemonic1 =
+(.:) :: Namespace -> Text -> MatchBULK
+(.:) ns1@(Namespace{mnemonic}) mnemonic1 =
     MatchBULK{..}
   where
     match (Reference (Ref ns2 Name{mnemonic = Just mnemonic2})) = ns1.matchID == ns2 && mnemonic1 == mnemonic2
