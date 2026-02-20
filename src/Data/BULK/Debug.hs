@@ -16,8 +16,9 @@ module Data.BULK.Debug (
 where
 
 import Data.Bifunctor (bimap)
-import Data.ByteString qualified as BS
-import Data.ByteString.Lazy qualified as LBS
+import Data.ByteString.Char8 qualified as BS
+import Data.ByteString.Lazy.Char8 qualified as LBS
+import Data.Hex (hex)
 import Data.List (intercalate)
 import Data.Map qualified as M
 import Data.Set qualified as S
@@ -27,8 +28,6 @@ import Data.Word (Word8)
 import Debug.Trace
 import Polysemy (Member, Sem)
 import Polysemy.State (State, get)
-import Text.Hex qualified as H
-import Witch (from)
 
 import Data.BULK.Types
 import Data.Int (Int64)
@@ -55,10 +54,10 @@ instance Debug BULK where
     debug (Reference ref) = debug ref
 
 instance Debug BS.ByteString where
-    debug = from . H.encodeHex
+    debug = BS.unpack . hex
 
 instance Debug LBS.ByteString where
-    debug = from . H.lazilyEncodeHex
+    debug = LBS.unpack . hex
 
 instance Debug NamespaceID where
     debug CoreNS = "{core}"

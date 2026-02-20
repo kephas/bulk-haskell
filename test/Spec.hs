@@ -23,7 +23,6 @@ import Data.BULK.BARK qualified as BARK
 import Data.BULK.Core qualified as Core
 import Data.BULK.Encode (pattern IntReference)
 import Data.BULK.Eval (mkContext)
-import Data.BULK.Hex (hex)
 import Test.BULK
 import Test.QuickCheck.Instances.BULK (simpleBULK)
 

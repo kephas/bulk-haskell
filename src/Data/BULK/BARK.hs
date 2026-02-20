@@ -5,13 +5,11 @@
 module Data.BULK.BARK where
 
 import Data.ByteString (ByteString)
+import Data.List (uncons)
+import Data.Maybe (fromJust)
 import Prelude hiding (words)
 
 import Data.BULK
-import Data.BULK.Hex (hex)
-import Data.BULK.ToFrom (list)
-import Data.List (uncons)
-import Data.Maybe (fromJust)
 
 newtype BARK = BARK [Entry]
     deriving (Eq, Show)

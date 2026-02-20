@@ -10,9 +10,7 @@ import Control.Lens (Lens', Prism', Traversal', at, ix, lens, makeLenses, makePr
 import Data.Bits (Bits)
 import Data.ByteString.Lazy (ByteString)
 import Data.Either.Extra (eitherToMaybe)
-import Data.Maybe (fromMaybe)
 import Data.Text (Text)
-import Text.Hex qualified as H
 
 import Data.BULK.Core (encodeInt, toIntegral)
 import Data.BULK.Decode (toNat)
@@ -37,10 +35,6 @@ _Int = prism' encodeInt toIntegral
 
 _Bytes :: Prism' Text ByteString
 _Bytes = prism' undefined $ eitherToMaybe . parseNotation
-
--- | This 'Prism` provides a 'Traversal' for tweaking the content of a 'ByteString'
-_Hex :: Prism' ByteString Text
-_Hex = prism' (H.lazyByteString . fromMaybe "" . H.decodeHex) (Just . H.strictText . H.lazilyEncodeHex)
 
 _Expression :: Prism' Value BULK
 _Expression = prism' Expression extract

@@ -20,10 +20,9 @@ description:         BULK library for Haskell
 
 dependencies:
 - base >= 4.7 && < 5
+- binary
 - bits
 - bytestring
-- digits
-- hex-text
 - lens
 - polysemy
 - polysemy-plugin
@@ -49,10 +48,10 @@ library:
   source-dirs: src
   dependencies:
     - largeword
-    - binary
     - containers
     - crypton
     - extra
+    - hex
     - megaparsec
     - memory
     - mtl
@@ -88,7 +87,6 @@ tests:
     - bulk
     - digits
     - hspec
-    - binary
     - quickcheck-instances
     - QuickCheck
     - random

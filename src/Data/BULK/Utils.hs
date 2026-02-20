@@ -5,16 +5,23 @@
 
 module Data.BULK.Utils where
 
+import Control.Monad ((>=>))
 import Data.Bifunctor (first)
+import Data.Hex (unhexM)
 import Data.Map.Strict qualified as M
 import Data.String.Interpolate (i)
 import GHC.Stack (HasCallStack)
+import Language.Haskell.TH (stringE)
+import Language.Haskell.TH.QuasiQuoter (QuasiQuoter (quoteExp), namedDefaultQuasiQuoter)
 import Polysemy (Member, Sem)
 import Polysemy.Error (Error, runError)
 import Polysemy.Output (Output, runOutputList)
 import Polysemy.State (State, evalState, get)
 
 import Data.BULK.Types (Namespace (..), NamespaceID, Result (..), Warning (..))
+
+hex :: QuasiQuoter
+hex = (namedDefaultQuasiQuoter "hex"){quoteExp = unhexM >=> stringE}
 
 insertIfMissing :: (Ord k) => k -> a -> M.Map k a -> M.Map k a
 insertIfMissing = M.insertWith (\_new old -> old)

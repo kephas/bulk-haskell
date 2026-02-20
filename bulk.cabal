@@ -33,7 +33,6 @@ library
       Data.BULK.Encode
       Data.BULK.Eval
       Data.BULK.Hash
-      Data.BULK.Hex
       Data.BULK.Lens
       Data.BULK.TextNotation
       Data.BULK.ToFrom
@@ -58,9 +57,8 @@ library
     , bytestring
     , containers
     , crypton
-    , digits
     , extra
-    , hex-text
+    , hex
     , largeword
     , lens
     , megaparsec
@@ -92,12 +90,11 @@ executable bulk-cli
   ghc-options: -fplugin=Polysemy.Plugin -Wall -threaded -rtsopts -with-rtsopts=-N -Wall
   build-depends:
       base >=4.7 && <5
+    , binary
     , bits
     , bulk
     , bytestring
-    , digits
     , filepath
-    , hex-text
     , lens
     , optparse-simple
     , polysemy
@@ -133,7 +130,6 @@ test-suite bulk-test
     , bulk
     , bytestring
     , digits
-    , hex-text
     , hspec
     , lens
     , polysemy
