@@ -34,7 +34,7 @@ import Data.BULK.Encode (encodeNat, pattern Nat)
 import Data.BULK.Eval (eval, execContext, mkContext, parseText)
 import Data.BULK.TextNotation (parseNotation, parseNotationFile)
 import Data.BULK.Types (BULK (..), Context (..), MatchBULK (..), Name (..), Namespace (..), Ref (..), Warning)
-import Data.BULK.Utils (failLeftIn, leftIn, runWarningsAndError)
+import Data.BULK.Utils (failLeftIn, leftIn, probeRepr, represent, runWarningsAndError)
 
 class FromBULK a where
     parseBULK :: BULK -> Parser a
@@ -55,7 +55,12 @@ decodeNotation :: (FromBULK a) => Context -> Text -> Either String a
 decodeNotation ctx = parseNotation >=> decode ctx
 
 decodeFile :: (HasCallStack, FromBULK a) => Context -> FilePath -> IO (Either String a)
-decodeFile ctx path = leftIn path . decode ctx <$> B.readFile path
+decodeFile ctx path = do
+    decoder <- represent decodeBinaryFile decodeNotationFile <$> (probeRepr path)
+    decoder ctx path
+
+decodeBinaryFile :: (HasCallStack, FromBULK a) => Context -> FilePath -> IO (Either String a)
+decodeBinaryFile ctx path = leftIn path . decode ctx <$> B.readFile path
 
 decodeNotationFile :: (HasCallStack, FromBULK a) => Context -> FilePath -> IO (Either String a)
 decodeNotationFile ctx file = do

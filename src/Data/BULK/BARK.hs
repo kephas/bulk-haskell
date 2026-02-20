@@ -31,7 +31,7 @@ data Hash
 
 verifyManifest :: Context -> FilePath -> IO (Either String ())
 verifyManifest ctx file = do
-    BARK entries <- decodeNotationFile ctx file >>= failLeft
+    BARK entries <- decodeFile ctx file >>= failLeft
     Right () <$ (sequenceA <$> traverse (verifyManifestEntry $ takeDirectory file) entries >>= failLeft)
 
 verifyManifestEntry :: FilePath -> Entry -> IO (Either String ())

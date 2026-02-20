@@ -82,6 +82,8 @@ data TypeMismatch = TypeMismatch
 
 newtype Warning = Warning {unWarning :: String}
 
+data Representation = BinaryBULK | TextBULK deriving (Eq, Show)
+
 newtype Result a = Result {unResult :: Either String a}
     deriving newtype (Eq, Ord, Show, Functor, Applicative, Monad)
 

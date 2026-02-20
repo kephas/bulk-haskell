@@ -18,7 +18,9 @@ import Polysemy.Error (Error, runError)
 import Polysemy.Output (Output, output, runOutputList)
 import Polysemy.State (State, evalState, get)
 
-import Data.BULK.Types (Namespace (..), NamespaceID, Result (..), Warning (..))
+import Data.BULK.Types (Namespace (..), NamespaceID, Representation (..), Result (..), Warning (..))
+import Data.ByteString qualified as BS
+import System.IO (IOMode (ReadMode), withFile)
 
 hex :: QuasiQuoter
 hex = (namedDefaultQuasiQuoter "hex"){quoteExp = unhexM >=> stringE}
@@ -65,6 +67,19 @@ failLeftIn file = failLeft . leftIn file
 
 failLeft :: (HasCallStack, MonadFail m) => Either String a -> m a
 failLeft = either fail pure
+
+probeRepr :: FilePath -> IO Representation
+probeRepr path = do
+    start <- readStart 4 path
+    pure if start == "\x01\x10\x00\x81" then BinaryBULK else TextBULK
+
+readStart :: Int -> FilePath -> IO BS.ByteString
+readStart size file =
+    withFile file ReadMode (`BS.hGet` size)
+
+represent :: a -> a -> Representation -> a
+represent onBin _onText BinaryBULK = onBin
+represent _onBin onText TextBULK = onText
 
 errIn :: String -> Result a -> Result a
 errIn place = errMap \err -> [i|#{place}: #{err}|]

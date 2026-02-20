@@ -214,6 +214,7 @@ spec = describe "BULK" $ do
                         , BARK.Description "missing version.bulk" $ BARK.MD5 [hex|93B885ADFE0DA089CDF634904FD59F71|]
                         ]
                 BARK.verifyManifest ctx "test/bulk/manifest.bulktext" `shouldReturn` Right ()
+                BARK.verifyManifest ctx "test/bulk/manifest.bulk" `shouldReturn` Right ()
 
     describe "slow tests" $ do
         prop "reads really big generic arrays" $ test_bigger_arrays_decoding 3
