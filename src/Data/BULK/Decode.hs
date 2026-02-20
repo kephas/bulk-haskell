@@ -25,6 +25,7 @@ import Witch (from)
 import Prelude hiding (readFile)
 
 import Data.BULK.Types (BULK (..), Ref (..), pattern Core)
+import Data.BULK.Utils (failLeftIn)
 
 -- | Syntax token
 data Syntax = FormEnd
@@ -33,11 +34,11 @@ data Syntax = FormEnd
 data VersionConstraint = ReadVersion | Version1
 
 -- | Read an entire file as a BULK stream
-readFile :: FilePath -> IO (Either String BULK)
-readFile path = parseStream <$> BL.readFile path
+readFile :: FilePath -> IO BULK
+readFile path = parseStream <$> BL.readFile path >>= failLeftIn path
 
-readFileV1 :: FilePath -> IO (Either String BULK)
-readFileV1 path = parseStreamV1 <$> BL.readFile path
+readFileV1 :: FilePath -> IO BULK
+readFileV1 path = parseStreamV1 <$> BL.readFile path >>= failLeftIn path
 
 -- | Parse an entire bytestring as a BULK stream
 parseStream :: ByteString -> Either String BULK

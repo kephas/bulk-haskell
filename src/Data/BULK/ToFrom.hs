@@ -25,14 +25,13 @@ import Polysemy.Error (Error)
 import Polysemy.Fail (Fail, failToError)
 import Polysemy.Output (Output)
 import Polysemy.State (State, evalState, get, put)
-import Witch (from)
 
 import Data.BULK.Core (encodeInt)
 import Data.BULK.Core qualified as Core
 import Data.BULK.Debug (debug)
 import Data.BULK.Decode (parseStream)
 import Data.BULK.Encode (encodeNat, pattern Nat)
-import Data.BULK.Eval (eval, evalExpr, execContext, mkContext, parseText)
+import Data.BULK.Eval (eval, execContext, mkContext, parseText)
 import Data.BULK.TextNotation (parseNotation, parseNotationFile)
 import Data.BULK.Types (BULK (..), Context (..), MatchBULK (..), Name (..), Namespace (..), Ref (..), Warning)
 import Data.BULK.Utils (failLeftIn, leftIn, runWarningsAndError)
@@ -60,15 +59,15 @@ decodeFile ctx path = leftIn path . decode ctx <$> B.readFile path
 
 decodeNotationFile :: (HasCallStack, FromBULK a) => Context -> FilePath -> IO (Either String a)
 decodeNotationFile ctx file = do
-    bulk <- parseNotationFile file >>= either fail pure
+    bulk <- parseNotationFile file
     pure $ leftIn file $ fromBULKWith ctx bulk
 
 loadNotationFiles :: (HasCallStack) => Context -> [FilePath] -> IO Context
 loadNotationFiles = foldM loadNotationFile
   where
     loadNotationFile ctx file = do
-        bulk <- parseNotationFile file >>= failLeftIn file
-        failLeftIn file $ execContext $ put (from ctx) >> evalExpr bulk
+        bulk <- parseNotationFile file
+        failLeftIn file $ execContext ctx bulk
 
 (<*:>) :: Namespace -> Text -> Parser a -> BULK -> Parser a
 ns <*:> name = withForm (ns .: name)

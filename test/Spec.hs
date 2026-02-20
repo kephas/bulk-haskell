@@ -6,12 +6,14 @@
 {-# LANGUAGE TypeApplications #-}
 {-# OPTIONS_GHC -Wno-x-partial #-}
 
+import Control.Exception (IOException)
 import Data.ByteString.Lazy (ByteString, pack, singleton)
 import Data.Foldable (for_, traverse_)
 import Data.Function (on)
 import Data.List (nubBy)
 import Data.String.Interpolate (i)
 import Data.Text (Text)
+import System.IO.Error (ioeGetErrorString)
 import Test.Hspec
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck (chooseInt, elements, forAll, vectorOf)
@@ -67,10 +69,10 @@ spec = describe "BULK" $ do
                     readFile "test/bulk/nesting.bulk" `shouldReturn` nesting
                     readFile "test/bulk/primitives.bulk" `shouldReturn` primitives
                 it "reports bad syntax" $ do
-                    readFile "test/bulk/bad nesting.bulk" `shouldReturn` badNesting
+                    readFile "test/bulk/bad nesting.bulk" `shouldThrow` (withError $ badNesting "test/bulk/bad nesting.bulk")
                 it "checks for version 1.0" $ do
-                    readFile "test/bulk/missing version.bulk" `shouldReturn` Left "missing version"
-                    readFileV1 "test/bulk/missing version.bulk" `shouldReturnRight` Form [Nil]
+                    readFile "test/bulk/missing version.bulk" `shouldThrow` withError "test/bulk/missing version.bulk: missing version"
+                    readFileV1 "test/bulk/missing version.bulk" `shouldReturn` Form [Nil]
             describe "version and profile" $ do
                 it "checks for version 1.0" $ do
                     parseStream "\x01\x10\x00\x81\x80\x02" `shouldBeRight` Form [Form [IntReference 16 0, 1, 0]]
@@ -125,7 +127,7 @@ spec = describe "BULK" $ do
             it "parses example files" $ do
                 parseNotationFile "test/bulk/nesting.bulktext" `shouldReturn` nesting
                 parseNotationFile "test/bulk/primitives.bulktext" `shouldReturn` primitives
-                parseNotationFile "test/bulk/bad nesting.bulktext" `shouldReturn` badNesting
+                parseNotationFile "test/bulk/bad nesting.bulktext" `shouldThrow` (withError $ badNesting "test/bulk/bad nesting.bulktext")
             it "parses unknown references" $ do
                 "foo:bar quux:one foo:baz" `shouldDenote` (uncurry IntReference <$> [(0x14, 0), (0x15, 0), (0x14, 1)])
                 "123:one" `shouldDenote` [IntReference 0x14 0]
@@ -218,28 +220,29 @@ spec = describe "BULK" $ do
         prop "has self-evaluating expressions" $ forAll (vectorOf 8 simpleBULK) $ \exprs ->
             fromBULK (Form exprs) `shouldBeRight` Form exprs
 
-nesting, primitives, badNesting :: Either String BULK
-nesting = Right $ Form [version 1 0, Form [], Form [Nil, Form [Nil], Form []]]
+nesting, primitives :: BULK
+nesting = Form [version 1 0, Form [], Form [Nil, Form [Nil], Form []]]
 primitives =
-    Right $
-        Form
-            [ version 1 0
-            , Form
-                [ Nil
-                , Array "Hello world!"
-                , Array [hex|2A|]
-                , Array ""
-                , Array [hex|40|]
-                , Array [hex|0100|]
-                , Array [hex|01000000|]
-                , Array [hex|0123456789ABCDEF|]
-                , IntReference 0x14 0x01
-                , IntReference 0x14 0x02
-                , IntReference 0x7E 0xFF
-                , IntReference (0x7F + 0xFF + 0xBC) 0x1A
-                ]
+    Form
+        [ version 1 0
+        , Form
+            [ Nil
+            , Array "Hello world!"
+            , Array [hex|2A|]
+            , Array ""
+            , Array [hex|40|]
+            , Array [hex|0100|]
+            , Array [hex|01000000|]
+            , Array [hex|0123456789ABCDEF|]
+            , IntReference 0x14 0x01
+            , IntReference 0x14 0x02
+            , IntReference 0x7E 0xFF
+            , IntReference (0x7F + 0xFF + 0xBC) 0x1A
             ]
-badNesting = Left "not enough data (while reading a form)"
+        ]
+
+badNesting :: FilePath -> String
+badNesting path = [i|#{path}: not enough data (while reading a form)|]
 
 parseOnlyIntCases, bidirectionalIntCases :: [(BULK, ByteString, Int)]
 parseOnlyIntCases =
@@ -320,3 +323,6 @@ instance FromBULK Bar where
 
 matchTo :: (HasCallStack, ToBULK a) => [(a, BULK)] -> IO ()
 matchTo = traverse_ (uncurry $ shouldBe . toBULK)
+
+withError :: String -> IOException -> Bool
+withError msg exc = msg == ioeGetErrorString exc

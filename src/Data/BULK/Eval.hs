@@ -12,7 +12,7 @@
 {-# LANGUAGE TypeOperators #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Data.BULK.Eval (eval, mkContext, emptyScope, evalExpr, execContext, parseText) where
+module Data.BULK.Eval (eval, mkContext, evalExpr, execContext, parseText) where
 
 import Control.Lens (Prism', at, over, preview, to, view, (^.), (^?), _Just)
 import Control.Monad.Extra (whenJust)
@@ -28,7 +28,7 @@ import Data.Text.Encoding (decodeUtf8')
 import GHC.Records (HasField)
 import Polysemy (Member, Members, Sem, run)
 import Polysemy.Error (Error, runError, throw)
-import Polysemy.State (State, evalState, execState, gets, modify, put)
+import Polysemy.State (State, evalState, execState, gets, modify)
 
 import Data.BULK.Core qualified as Core
 import Data.BULK.Debug (debug, detraceState)
@@ -45,8 +45,7 @@ import Polysemy.Output (Output)
 import Witch (from)
 
 eval :: (Members [Error String, Output Warning] r) => Context -> BULK -> Sem r BULK
-eval ctx bulk = evalState emptyScope do
-    put $ from ctx
+eval ctx bulk = evalState (from ctx) do
     evalExpr bulk >>= maybe (error "nothing yielded") pure
 
 mkContext :: [Namespace] -> Context
@@ -55,11 +54,9 @@ mkContext nss = Context S.empty $ S.fromList $ coreNS : nss
 instance Monoid Context where
     mempty = Context S.empty $ S.singleton coreNS
 
-execContext :: Sem '[State Scope, Error String, Output Warning] a -> Either String Context
-execContext = (from <$>) . run . runWarningsAndError . execState emptyScope
-
-emptyScope :: Scope
-emptyScope = from @Context mempty
+execContext :: Context -> BULK -> Either String Context
+execContext ctx bulk =
+    fmap from . run $ runWarningsAndError $ execState (from ctx) $ evalExpr bulk
 
 coreNS :: Namespace
 coreNS =

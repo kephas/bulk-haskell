@@ -37,7 +37,7 @@ import Witch (from)
 import Data.BULK.Decode (parseStream)
 import Data.BULK.Encode (encodeExpr, encodeNat)
 import Data.BULK.Types (BULK (..), Name (..), NamespaceID (CoreNS), Ref (..), Value (..))
-import Data.BULK.Utils (failLeft)
+import Data.BULK.Utils (failLeft, failLeftIn)
 import Data.Char (isSpace)
 
 data NotationNS = NotationNS {namespace :: NamespaceID, usedNames :: Map Text Word8, availableNames :: [Word8]}
@@ -54,16 +54,16 @@ parseNotationNamed :: String -> Text -> Either String ByteString
 parseNotationNamed name source =
     BB.toLazyByteString <$> runParser showFail name notationP source
 
-parseNotationFile :: FilePath -> IO (Either String BULK)
+parseNotationFile :: FilePath -> IO BULK
 parseNotationFile = parseNotationFileInto parseStream
 
-parseNotationFileBin :: FilePath -> IO (Either String ByteString)
+parseNotationFileBin :: FilePath -> IO ByteString
 parseNotationFileBin = parseNotationFileInto Right
 
-parseNotationFileInto :: (ByteString -> Either String a) -> FilePath -> IO (Either String a)
+parseNotationFileInto :: (ByteString -> Either String a) -> FilePath -> IO a
 parseNotationFileInto convert file = do
     text <- readTextFile file
-    pure $ parseNotationNamed file text >>= convert
+    failLeftIn file $ parseNotationNamed file text >>= convert
 
 readTextFile :: FilePath -> IO Text
 readTextFile file = do

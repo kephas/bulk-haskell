@@ -28,4 +28,4 @@ untextify :: FilePath -> IO ()
 untextify file = do
     let target' = file -<.> "bulk"
         target = if file == target' then file <.> "bulk" else target'
-    parseNotationFileBin file >>= either putStrLn (writeFileLBS target)
+    parseNotationFileBin file >>= writeFileLBS target
