@@ -1,15 +1,22 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Data.BULK.BARK where
 
-import Data.ByteString (ByteString)
+import Crypto.Hash qualified as Hash
+import Data.ByteArray (ByteArrayAccess, convert, eq)
+import Data.ByteString as BS (ByteString, readFile)
 import Data.List (uncons)
 import Data.Maybe (fromJust)
+import Data.String.Interpolate (i)
+import System.FilePath (takeDirectory, (</>))
 import Prelude hiding (words)
 
 import Data.BULK
+import Data.BULK.Debug (debug)
+import Data.BULK.Utils (failLeft)
 
 newtype BARK = BARK [Entry]
     deriving (Eq, Show)
@@ -21,6 +28,27 @@ data Hash
     = Shake128 ByteString
     | MD5 ByteString
     deriving (Eq, Show)
+
+verifyManifest :: Context -> FilePath -> IO (Either String ())
+verifyManifest ctx file = do
+    BARK entries <- decodeNotationFile ctx file >>= failLeft
+    Right () <$ (sequenceA <$> traverse (verifyManifestEntry $ takeDirectory file) entries >>= failLeft)
+
+verifyManifestEntry :: FilePath -> Entry -> IO (Either String ())
+verifyManifestEntry root entry = do
+    content <- BS.readFile $ root </> entry.path
+    let (entryDigest, fileDigest) = case entry.hash of
+            Shake128 digest -> (digest, toBS $ Hash.hashWith (Hash.SHAKE128 :: Hash.SHAKE128 256) content)
+            MD5 digest -> (digest, toBS $ Hash.hashWith Hash.MD5 content)
+    pure $
+        if entryDigest `eq` fileDigest
+            then
+                Right ()
+            else
+                Left [i|expected digest #{debug entryDigest} but got #{debug fileDigest}|]
+
+toBS :: (ByteArrayAccess ba) => ba -> ByteString
+toBS = convert
 
 instance FromBULK BARK where
     parseBULK =

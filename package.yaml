@@ -23,6 +23,7 @@ dependencies:
 - binary
 - bits
 - bytestring
+- filepath
 - lens
 - polysemy
 - polysemy-plugin
@@ -71,7 +72,6 @@ executables:
     dependencies:
     - bulk
     - relude
-    - filepath
     - optparse-simple
 
 tests:

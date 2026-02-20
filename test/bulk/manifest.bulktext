@@ -4,11 +4,11 @@ bark:bark
 ( bark:description
  ( bark:metadata
   ( bark:about ( bark:path "nesting.bulk" ) )
-  ( bark:hash ( bark:shake128 #[4] 0x30303030 ) ) ) )
+  ( bark:hash ( bark:shake128 #[32] 0xA9624CB8FD374AE1D2D1537DC94B766A29AA38CD3AB958AF9BF80E05BB291818 ) ) ) )
 ( bark:description
  ( bark:metadata
   ( bark:about ( bark:path "primitives.bulk" ) )
-  ( bark:hash ( bark:shake128 #[4] 0x30303030 ) ) ) )
+  ( bark:hash ( bark:shake128 #[32] 0xA1ABD6CF9F45CFB7967570CC796CC085872257891DE1DC3D2FB277555E156CCB ) ) ) )
 ( bark:description
  ( bark:metadata
   ( bark:about ( bark:path "missing version.bulk" ) )

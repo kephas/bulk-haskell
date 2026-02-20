@@ -58,6 +58,7 @@ library
     , containers
     , crypton
     , extra
+    , filepath
     , hex
     , largeword
     , lens
@@ -130,6 +131,7 @@ test-suite bulk-test
     , bulk
     , bytestring
     , digits
+    , filepath
     , hspec
     , lens
     , polysemy
