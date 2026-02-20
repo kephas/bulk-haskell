@@ -1,6 +1,5 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
 
@@ -20,6 +19,8 @@ import Data.BULK.Types (BULK, CheckDigest, Context, Name (..), Namespace (..), N
 import Data.BULK.Types qualified as Core
 import Data.Map.Strict qualified as M
 import Data.Word (Word8)
+import Polysemy (run)
+import Polysemy.Error (runError)
 
 makePrisms ''BULK
 makePrisms ''Context
@@ -34,7 +35,7 @@ _Int :: (Integral a) => Prism' BULK a
 _Int = prism' encodeInt toIntegral
 
 _Bytes :: Prism' Text ByteString
-_Bytes = prism' undefined $ eitherToMaybe . parseNotation
+_Bytes = prism' undefined $ eitherToMaybe . run . runError . parseNotation
 
 _Expression :: Prism' Value BULK
 _Expression = prism' Expression extract

@@ -1,15 +1,11 @@
-{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeAbstractions #-}
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE TypeOperators #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Data.BULK.Eval (eval, mkContext, evalExpr, execContext, parseText) where
@@ -26,7 +22,7 @@ import Data.String.Interpolate (i)
 import Data.Text (Text)
 import Data.Text.Encoding (decodeUtf8')
 import GHC.Records (HasField)
-import Polysemy (Member, Members, Sem, run)
+import Polysemy (Member, Members, Sem)
 import Polysemy.Error (Error, runError, throw)
 import Polysemy.State (State, evalState, execState, gets, modify)
 
@@ -40,7 +36,7 @@ import Data.BULK.Types (BULK (..), CheckDigest, Context (..), Name (..), Namespa
 import Data.BULK.Types qualified as Fun (LazyFunction (..))
 import Data.BULK.Types qualified as N (Name (..))
 import Data.BULK.Types qualified as NS (Namespace (..))
-import Data.BULK.Utils (bareNS, evalLocalState, insertIfMissing, runLocalState, runWarningsAndError, warn, (<$$$>))
+import Data.BULK.Utils (bareNS, evalLocalState, insertIfMissing, runLocalState, warn, (<$$$>))
 import Polysemy.Output (Output)
 import Witch (from)
 
@@ -54,9 +50,9 @@ mkContext nss = Context S.empty $ S.fromList $ coreNS : nss
 instance Monoid Context where
     mempty = Context S.empty $ S.singleton coreNS
 
-execContext :: Context -> BULK -> Either String Context
+execContext :: (Members [Error String, Output Warning] r) => Context -> BULK -> Sem r Context
 execContext ctx bulk =
-    fmap from . run $ runWarningsAndError $ execState (from ctx) $ evalExpr bulk
+    fmap from . execState (from ctx) $ evalExpr bulk
 
 coreNS :: Namespace
 coreNS =
@@ -241,7 +237,7 @@ defineBootstrappedNamespace digestRef nsDigest marker toDigest = do
 defineQualifiedNamespace :: (Members [State Scope, Output Warning, Error String] r) => Ref -> ByteString -> Int -> ByteString -> Sem r (Maybe BULK)
 defineQualifiedNamespace digestRef nsDigest marker toDigest = do
     (qualifiedRef, digest) <- retrieveDigest digestRef
-    nested <- parseNested toDigest
+    nested <- parseStreamV1 toDigest
     case (runCheckDigest digest nsDigest toDigest, nested) of
         (Right (), Form (Nil : defs)) -> notYielding do
             definition <- evalLocalState do
@@ -261,7 +257,7 @@ defineQualifiedNamespace digestRef nsDigest marker toDigest = do
 
 evalNS :: (Members [State Scope, Output Warning, Error String] r) => Int -> ByteString -> Namespace -> Sem r Namespace
 evalNS marker defBytes newNS = do
-    nested <- parseNested defBytes
+    nested <- parseStreamV1 defBytes
     case nested of
         Form (Nil : defs) -> evalLocalState do
             knowNS newNS
@@ -278,7 +274,7 @@ retrieveDigest name =
 definePackage :: (Members [State Scope, Output Warning, Error String] r) => Ref -> ByteString -> ByteString -> Sem r (Maybe BULK)
 definePackage digestRef pkgDigest defBytes = notYielding do
     (qualifiedRef, digest) <- retrieveDigest digestRef
-    nested <- parseNested defBytes
+    nested <- parseStreamV1 defBytes
     case (runCheckDigest digest pkgDigest defBytes, nested) of
         (Right (), Form (Nil : nss)) -> notYielding do
             foundNSS <- traverse findNS nss
@@ -342,9 +338,6 @@ runMatchID (UnassociatedNS _) _ =
 
 notYielding :: (Functor f) => f a -> f (Maybe BULK)
 notYielding = (Nothing <$)
-
-parseNested :: (Member (Error String) r) => ByteString -> Sem r BULK
-parseNested = either throw pure . parseStreamV1
 
 parseText :: (Member (Error String) r) => BULK -> Sem r Text
 parseText (Array bs) = either (throw . show) pure $ decodeUtf8' $ toStrict bs

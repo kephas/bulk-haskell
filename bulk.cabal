@@ -26,6 +26,7 @@ source-repository head
 library
   exposed-modules:
       Data.BULK
+      Data.BULK.API
       Data.BULK.BARK
       Data.BULK.Core
       Data.BULK.Debug
@@ -44,11 +45,14 @@ library
       src
   default-extensions:
       BlockArguments
+      DataKinds
       FlexibleContexts
       ImportQualifiedPost
       LambdaCase
       NoFieldSelectors
       OverloadedRecordDot
+      RankNTypes
+      TypeApplications
   ghc-options: -fplugin=Polysemy.Plugin -Wall
   build-depends:
       base >=4.7 && <5
@@ -83,11 +87,14 @@ executable bulk-cli
       app
   default-extensions:
       BlockArguments
+      DataKinds
       FlexibleContexts
       ImportQualifiedPost
       LambdaCase
       NoFieldSelectors
       OverloadedRecordDot
+      RankNTypes
+      TypeApplications
   ghc-options: -fplugin=Polysemy.Plugin -Wall -threaded -rtsopts -with-rtsopts=-N -Wall
   build-depends:
       base >=4.7 && <5
@@ -117,11 +124,14 @@ test-suite bulk-test
       test
   default-extensions:
       BlockArguments
+      DataKinds
       FlexibleContexts
       ImportQualifiedPost
       LambdaCase
       NoFieldSelectors
       OverloadedRecordDot
+      RankNTypes
+      TypeApplications
   ghc-options: -fplugin=Polysemy.Plugin -Wall -threaded -rtsopts -with-rtsopts=-N -Wall
   build-depends:
       QuickCheck

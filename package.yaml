@@ -39,11 +39,14 @@ ghc-options:
 
 default-extensions:
 - BlockArguments
+- DataKinds
 - FlexibleContexts
 - ImportQualifiedPost
 - LambdaCase
 - NoFieldSelectors
 - OverloadedRecordDot
+- RankNTypes
+- TypeApplications
 
 library:
   source-dirs: src

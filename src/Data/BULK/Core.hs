@@ -17,6 +17,8 @@ import Prelude hiding (False, True)
 import Data.BULK.Decode (parseLazy, toNat)
 import Data.BULK.Encode (boundedPutter, encodeNat, unsafeEncodeBounded)
 import Data.BULK.Types (BULK (..), pattern Core)
+import Polysemy (run)
+import Polysemy.Error (runError)
 
 pattern Version, Namespace, Package, Import, Define, Mnemonic, True, False, UnsignedInt, SignedInt, Trace :: BULK
 pattern Version = Core 0x00
@@ -52,7 +54,7 @@ toIntegral bulk =
         Form [SignedInt, ArrayBlocks n bs] -> bigInt n bs
         _ -> Nothing
   where
-    int get = eitherToMaybe . fmap fromIntegral . parseLazy get
+    int get = eitherToMaybe . run . runError . fmap fromIntegral . parseLazy get
     bigInt blocks = int (getBlocks blocks 0)
     getBlocks 0 acc = pure acc
     getBlocks blocks acc = do

@@ -8,7 +8,7 @@ bark:bark
 ( bark:description
  ( bark:metadata
   ( bark:about ( bark:path "primitives.bulk" ) )
-  ( bark:hash ( bark:shake128 #[32] 0xA1ABD6CF9F45CFB7967570CC796CC085872257891DE1DC3D2FB277555E156CCB ) ) ) )
+  ( bark:hash ( bark:shake128 #[32] 0xA1ABD6CF9F45CFB7967570CC796CC085872257891DE1DC3D2FB277555E156CC0 ) ) ) )
 ( bark:description
  ( bark:metadata
   ( bark:about ( bark:path "missing version.bulk" ) )

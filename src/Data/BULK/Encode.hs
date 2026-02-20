@@ -3,7 +3,6 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ViewPatterns #-}
 
 module Data.BULK.Encode (encode, pattern IntReference, encodeNat, pattern Nat, encodeExpr, unsafeEncodeBounded, boundedPutter)
@@ -19,37 +18,39 @@ import Data.List.Extra (list)
 import Data.Maybe (fromMaybe)
 import Data.String.Interpolate (i)
 import Data.Word (Word8)
+import Polysemy (Member, Sem)
+import Polysemy.Error (Error, throw)
 import Witch (from, tryFrom)
 
 import Data.BULK.Debug (debug)
 import Data.BULK.Decode (toNat)
 import Data.BULK.Types (BULK (..), Name (..), Ref (..))
 
-encode :: [BULK] -> Either String BS.ByteString
+encode :: (Member (Error String) r) => [BULK] -> Sem r BS.ByteString
 encode = (BB.toLazyByteString <$>) . encodeSeq
 
-encodeSeq :: [BULK] -> Either String BB.Builder
+encodeSeq :: (Member (Error String) r) => [BULK] -> Sem r BB.Builder
 encodeSeq = (mconcat <$>) . traverse encodeExpr
 
-encodeExpr :: BULK -> Either String BB.Builder
-encodeExpr Nil = Right $ BB.word8 0
+encodeExpr :: (Member (Error String) r) => BULK -> Sem r BB.Builder
+encodeExpr Nil = pure $ BB.word8 0
 encodeExpr (Form exprs) = do
     content <- encodeSeq exprs
-    Right $ BB.word8 1 <> content <> BB.word8 2
-encodeExpr (Array [num]) | num < 64 = Right $ BB.word8 $ 0x80 + num
+    pure $ BB.word8 1 <> content <> BB.word8 2
+encodeExpr (Array [num]) | num < 64 = pure $ BB.word8 $ 0x80 + num
 encodeExpr (Array bs) =
     if len < 64
-        then Right $ BB.word8 (fromIntegral $ 0xC0 + len) <> BB.lazyByteString bs
+        then pure $ BB.word8 (fromIntegral $ 0xC0 + len) <> BB.lazyByteString bs
         else do
             size <- encodeExpr (encodeNat len)
-            Right $ BB.word8 3 <> size <> BB.lazyByteString bs
+            pure $ BB.word8 3 <> size <> BB.lazyByteString bs
   where
     len = BS.length bs
 encodeExpr (IntReference ns name)
-    | ns < 0x7F = Right $ int ns <> BB.word8 name
-    | otherwise = Right $ foldMap int $ cutInWords ns ++ [fromIntegral name]
+    | ns < 0x7F = pure $ int ns <> BB.word8 name
+    | otherwise = pure $ foldMap int $ cutInWords ns ++ [fromIntegral name]
 encodeExpr (Reference ref) =
-    Left [i|not an encodable reference: #{debug ref}|]
+    throw [i|not an encodable reference: #{debug ref}|]
 
 pattern IntReference :: Int -> Word8 -> BULK
 pattern IntReference ns num <- (toIntRef -> Just (ns, num))

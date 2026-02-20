@@ -17,15 +17,17 @@ module Data.BULK.Decode (
 import Data.Binary.Get
 import Data.Bits (shiftR, (.&.))
 import Data.Bool (bool)
-import Data.ByteString.Lazy (ByteString)
+import Data.ByteString.Lazy (LazyByteString)
 import Data.ByteString.Lazy qualified as BL
 import Data.Either.Extra (eitherToMaybe)
 import Data.Word (Word8)
+import Polysemy (Member, Sem)
+import Polysemy.Error (Error, throw)
 import Witch (from)
 import Prelude hiding (readFile)
 
 import Data.BULK.Types (BULK (..), Ref (..), pattern Core)
-import Data.BULK.Utils (failLeftIn)
+import Data.BULK.Utils (IOE, placeError, readFileLBS)
 
 -- | Syntax token
 data Syntax = FormEnd
@@ -34,17 +36,17 @@ data Syntax = FormEnd
 data VersionConstraint = ReadVersion | Version1
 
 -- | Read an entire file as a BULK stream
-readFile :: FilePath -> IO BULK
-readFile path = parseStream <$> BL.readFile path >>= failLeftIn path
+readFile :: FilePath -> IOE r BULK
+readFile path = placeError path $ readFileLBS path >>= parseStream
 
-readFileV1 :: FilePath -> IO BULK
-readFileV1 path = parseStreamV1 <$> BL.readFile path >>= failLeftIn path
+readFileV1 :: FilePath -> IOE r BULK
+readFileV1 path = placeError path $ readFileLBS path >>= parseStreamV1
 
 -- | Parse an entire bytestring as a BULK stream
-parseStream :: ByteString -> Either String BULK
+parseStream :: (Member (Error String) r) => LazyByteString -> Sem r BULK
 parseStream = parseLazy $ getStream ReadVersion
 
-parseStreamV1 :: ByteString -> Either String BULK
+parseStreamV1 :: (Member (Error String) r) => LazyByteString -> Sem r BULK
 parseStreamV1 = parseLazy $ getStream Version1
 
 -- | Get monad to read one BULK expression
@@ -141,9 +143,9 @@ split26 byte = (shiftR (byte .&. 0xC0) 6, fromIntegral $ byte .&. 0x3F)
 pattern Prefix2 :: (Integral a) => Word8 -> a -> Word8
 pattern Prefix2 prefix value <- (split26 -> (prefix, value))
 
-parseLazy :: Get a -> ByteString -> Either String a
+parseLazy :: (Member (Error String) r) => Get a -> LazyByteString -> Sem r a
 parseLazy get input =
     case pushEndOfInput $ runGetIncremental get `pushChunks` input of
-        Fail _unconsumed _offset err -> Left err
-        Done _unconsumed _offset result -> Right result
-        Partial _k -> Left "Impossible: parser wasn't failed or done after end of input!"
+        Fail _unconsumed _offset err -> throw err
+        Done _unconsumed _offset result -> pure result
+        Partial _k -> throw "Impossible: parser wasn't failed or done after end of input!"

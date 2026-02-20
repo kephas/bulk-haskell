@@ -3,17 +3,14 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE TypeApplications #-}
 {-# OPTIONS_GHC -Wno-x-partial #-}
 
-import Control.Exception (IOException)
 import Data.ByteString.Lazy (ByteString, pack, singleton)
 import Data.Foldable (for_, traverse_)
 import Data.Function (on)
 import Data.List (nubBy)
 import Data.String.Interpolate (i)
 import Data.Text (Text)
-import System.IO.Error (ioeGetErrorString)
 import Test.Hspec
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck (chooseInt, elements, forAll, vectorOf)
@@ -69,10 +66,10 @@ spec = describe "BULK" $ do
                     readFile "test/bulk/nesting.bulk" `shouldReturn` nesting
                     readFile "test/bulk/primitives.bulk" `shouldReturn` primitives
                 it "reports bad syntax" $ do
-                    readFile "test/bulk/bad nesting.bulk" `shouldThrow` (withError $ badNesting "test/bulk/bad nesting.bulk")
+                    readFile "test/bulk/bad nesting.bulk" `shouldReturn` badNesting "test/bulk/bad nesting.bulk"
                 it "checks for version 1.0" $ do
-                    readFile "test/bulk/missing version.bulk" `shouldThrow` withError "test/bulk/missing version.bulk: missing version"
-                    readFileV1 "test/bulk/missing version.bulk" `shouldReturn` Form [Nil]
+                    readFile "test/bulk/missing version.bulk" `shouldReturn` Left "test/bulk/missing version.bulk: missing version"
+                    readFileV1 "test/bulk/missing version.bulk" `shouldReturnRight` Form [Nil]
             describe "version and profile" $ do
                 it "checks for version 1.0" $ do
                     parseStream "\x01\x10\x00\x81\x80\x02" `shouldBeRight` Form [Form [IntReference 16 0, 1, 0]]
@@ -127,12 +124,12 @@ spec = describe "BULK" $ do
             it "parses example files" $ do
                 parseNotationFile "test/bulk/nesting.bulktext" `shouldReturn` nesting
                 parseNotationFile "test/bulk/primitives.bulktext" `shouldReturn` primitives
-                parseNotationFile "test/bulk/bad nesting.bulktext" `shouldThrow` (withError $ badNesting "test/bulk/bad nesting.bulktext")
+                parseNotationFile "test/bulk/bad nesting.bulktext" `shouldReturn` badNesting "test/bulk/bad nesting.bulktext"
             it "parses unknown references" $ do
                 "foo:bar quux:one foo:baz" `shouldDenote` (uncurry IntReference <$> [(0x14, 0), (0x15, 0), (0x14, 1)])
                 "123:one" `shouldDenote` [IntReference 0x14 0]
             it "uses known mnemonics" $ do
-                ctx <- loadNotationFiles ctx0 ["test/bulk/123.bulktext"]
+                Right ctx <- loadNotationFiles ctx0 ["test/bulk/123.bulktext"]
                 decodeNotationFile @[Int] ctx "test/bulk/321.bulktext" `shouldReturnRight` [1]
             it "parses nested BULK" $ do
                 "([ nil ])" `shouldDenote` [Array "\0"]
@@ -168,19 +165,19 @@ spec = describe "BULK" $ do
                 decodeNotationFile @[()] ctx0 "test/bulk/bootstrap-bad.bulktext" `shouldReturn` Left "test/bulk/bootstrap-bad.bulktext: unable to bootstrap namespace: bootstrap"
                 decodeNotationFile @[()] ctx0 "config/hash0.bulktext" `shouldReturnRight` []
             it "can bootstrap packages" $ do
-                ctx <- loadNotationFiles ctx0 ["test/bulk/config/foo.bulktext", "test/bulk/config/bar.bulktext", "test/bulk/config/foobar.bulktext"]
+                Right ctx <- loadNotationFiles ctx0 ["test/bulk/config/foo.bulktext", "test/bulk/config/bar.bulktext", "test/bulk/config/foobar.bulktext"]
                 decodeNotation ctx "( version 1 0 ) ( import 20 ( package ( 0x16-00 #[4] 0xB4475636 ) 3 ) ) ( bar:bar ( bar:int 2 ) ( bar:foo ( foo:foo true true 99 ) ) )" `shouldBeRight` [Bar 2 (Foo True True 99)]
             it "has verifiable packages" $ do
                 decodeNotationFile @[()] ctx0 "test/bulk/package-bad.bulktext" `shouldReturn` Left "test/bulk/package-bad.bulktext: verification failed for package (expected digest 0000000000000000000000000000000000000000000000000000000000000000 but got 7a6dcf4b2cf07e63b60b893c6ac193b55ce38857e18148afc5b113189324747c)"
             it "warns of missing packages" $ do
-                ctx <- loadNotationFiles ctx0 ["test/bulk/config/foo.bulktext", "test/bulk/config/bar.bulktext", "test/bulk/config/foobar.bulktext"]
+                Right ctx <- loadNotationFiles ctx0 ["test/bulk/config/foo.bulktext", "test/bulk/config/bar.bulktext", "test/bulk/config/foobar.bulktext"]
                 decodeNotation @[Bar] ctx "( version 1 0 ) ( import 20 ( namespace ( hash0:shake128 #[4] 0x9DBFD602 ) ) ) ( import 21 ( package ( hash0:shake128 w6[0] ) 2 ) ) ( bar:bar ( bar:int 1 ) ( bar:foo ( foo:foo false true 42 ) ) )" `shouldBe` Left [i|not the expected operator: ({21}:0) (expected (bar:bar))\nunknown package: 00\n|]
 
         --
         -- Parser monad
         describe "Parser monad" $ do
             it "parses Haskell values" $ do
-                ctx <- loadNotationFiles ctx0 ["test/bulk/config/foo.bulktext", "test/bulk/config/bar.bulktext", "test/bulk/config/foobar.bulktext"]
+                Right ctx <- loadNotationFiles ctx0 ["test/bulk/config/foo.bulktext", "test/bulk/config/bar.bulktext", "test/bulk/config/foobar.bulktext"]
                 decodeNotation ctx "( version 1 0 ) ( import 20 ( namespace ( hash0:shake128 #[4] 0x9DBFD602 ) ) ) ( import 21 ( namespace ( hash0:shake128 #[4] 0x37B6D258 ) ) ) ( foo:foo false true 42 )" `shouldBeRight` [Foo False True 42]
                 decodeNotation @[Foo] ctx "( import 20 ( namespace ( hash0:shake128 #[4] 0x9DBFD602 ) ) ) ( import 21 ( namespace ( hash0:shake128 #[4] 0x37B6D258 ) ) ) ( foo:foo false true 42 )" `shouldBe` Left "missing version"
                 decodeNotation @[Foo] ctx "( version 1 0 ) ( import 20 ( namespace ( hash0:shake128 #[4] 0x9DBFD602 ) ) ) ( import 21 ( namespace ( hash0:shake128 #[4] 0x37B6D258 ) ) ) ( foo:foo false true nil )" `shouldBe` Left "cannot parse as integer: nil"
@@ -206,44 +203,45 @@ spec = describe "BULK" $ do
         -- BARK
         describe "BARK" $ do
             it "reads a manifest" $ do
-                ctx <- loadNotationFiles ctx0 ["test/bulk/config/bark-alpha.bulktext"]
+                Right ctx <- loadNotationFiles ctx0 ["test/bulk/config/bark-alpha.bulktext"]
                 decodeNotationFile ctx "test/bulk/manifest.bulktext"
                     `shouldReturnRight` BARK.BARK
                         [ BARK.Description "nesting.bulk" $ BARK.Shake128 [hex|A9624CB8FD374AE1D2D1537DC94B766A29AA38CD3AB958AF9BF80E05BB291818|]
-                        , BARK.Description "primitives.bulk" $ BARK.Shake128 [hex|A1ABD6CF9F45CFB7967570CC796CC085872257891DE1DC3D2FB277555E156CCB|]
+                        , BARK.Description "primitives.bulk" $ BARK.Shake128 [hex|A1ABD6CF9F45CFB7967570CC796CC085872257891DE1DC3D2FB277555E156CC0|]
                         , BARK.Description "missing version.bulk" $ BARK.MD5 [hex|93B885ADFE0DA089CDF634904FD59F71|]
                         ]
-                BARK.verifyManifest ctx "test/bulk/manifest.bulktext" `shouldReturn` Right ()
-                BARK.verifyManifest ctx "test/bulk/manifest.bulk" `shouldReturn` Right ()
+                BARK.verifyManifest ctx "test/bulk/manifest.bulktext" `shouldReturn` Right [BARK.OK "nesting.bulk", BARK.Failed "primitives.bulk" "expected digest A1ABD6CF9F45CFB7967570CC796CC085872257891DE1DC3D2FB277555E156CC0 but got A1ABD6CF9F45CFB7967570CC796CC085872257891DE1DC3D2FB277555E156CCB", BARK.OK "missing version.bulk"]
+                BARK.verifyManifest ctx "test/bulk/manifest.bulk" `shouldReturn` Right [BARK.OK "nesting.bulk", BARK.Failed "primitives.bulk" "expected digest A1ABD6CF9F45CFB7967570CC796CC085872257891DE1DC3D2FB277555E156CC0 but got A1ABD6CF9F45CFB7967570CC796CC085872257891DE1DC3D2FB277555E156CCB", BARK.OK "missing version.bulk"]
 
     describe "slow tests" $ do
         prop "reads really big generic arrays" $ test_bigger_arrays_decoding 3
         prop "has self-evaluating expressions" $ forAll (vectorOf 8 simpleBULK) $ \exprs ->
             fromBULK (Form exprs) `shouldBeRight` Form exprs
 
-nesting, primitives :: BULK
-nesting = Form [version 1 0, Form [], Form [Nil, Form [Nil], Form []]]
+nesting, primitives :: Either String BULK
+nesting = Right $ Form [version 1 0, Form [], Form [Nil, Form [Nil], Form []]]
 primitives =
-    Form
-        [ version 1 0
-        , Form
-            [ Nil
-            , Array "Hello world!"
-            , Array [hex|2A|]
-            , Array ""
-            , Array [hex|40|]
-            , Array [hex|0100|]
-            , Array [hex|01000000|]
-            , Array [hex|0123456789ABCDEF|]
-            , IntReference 0x14 0x01
-            , IntReference 0x14 0x02
-            , IntReference 0x7E 0xFF
-            , IntReference (0x7F + 0xFF + 0xBC) 0x1A
+    Right $
+        Form
+            [ version 1 0
+            , Form
+                [ Nil
+                , Array "Hello world!"
+                , Array [hex|2A|]
+                , Array ""
+                , Array [hex|40|]
+                , Array [hex|0100|]
+                , Array [hex|01000000|]
+                , Array [hex|0123456789ABCDEF|]
+                , IntReference 0x14 0x01
+                , IntReference 0x14 0x02
+                , IntReference 0x7E 0xFF
+                , IntReference (0x7F + 0xFF + 0xBC) 0x1A
+                ]
             ]
-        ]
 
-badNesting :: FilePath -> String
-badNesting path = [i|#{path}: not enough data (while reading a form)|]
+badNesting :: FilePath -> Either String BULK
+badNesting path = Left [i|#{path}: not enough data (while reading a form)|]
 
 parseOnlyIntCases, bidirectionalIntCases :: [(BULK, ByteString, Int)]
 parseOnlyIntCases =
@@ -324,6 +322,3 @@ instance FromBULK Bar where
 
 matchTo :: (HasCallStack, ToBULK a) => [(a, BULK)] -> IO ()
 matchTo = traverse_ (uncurry $ shouldBe . toBULK)
-
-withError :: String -> IOException -> Bool
-withError msg exc = msg == ioeGetErrorString exc

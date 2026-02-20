@@ -1,4 +1,3 @@
-{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -7,8 +6,8 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TypeOperators #-}
 
 module Data.BULK.ToFrom where
 
@@ -19,10 +18,9 @@ import Data.ByteString.Lazy qualified as B
 import Data.String.Interpolate (i)
 import Data.Text (Text, unpack)
 import Data.Text.Encoding (encodeUtf8)
-import GHC.Stack (HasCallStack)
-import Polysemy (Sem, raise, run)
-import Polysemy.Error (Error)
-import Polysemy.Fail (Fail, failToError)
+import Polysemy (Member, Members, Sem, raise, run)
+import Polysemy.Error (Error, throw)
+import Polysemy.Fail (Fail, runFail)
 import Polysemy.Output (Output)
 import Polysemy.State (State, evalState, get, put)
 
@@ -34,7 +32,7 @@ import Data.BULK.Encode (encodeNat, pattern Nat)
 import Data.BULK.Eval (eval, execContext, mkContext, parseText)
 import Data.BULK.TextNotation (parseNotation, parseNotationFile)
 import Data.BULK.Types (BULK (..), Context (..), MatchBULK (..), Name (..), Namespace (..), Ref (..), Warning)
-import Data.BULK.Utils (failLeftIn, leftIn, probeRepr, represent, runWarningsAndError)
+import Data.BULK.Utils (IOE, errorToFail, placeError, probeRepr, readFileLBS, represent)
 
 class FromBULK a where
     parseBULK :: BULK -> Parser a
@@ -42,37 +40,39 @@ class FromBULK a where
 class ToBULK a where
     toBULK :: a -> BULK
 
-fromBULK :: (FromBULK a) => BULK -> Either String a
+fromBULK :: (Members [Error String, Output Warning] r, FromBULK a) => BULK -> Sem r a
 fromBULK = fromBULKWith $ mkContext []
 
-fromBULKWith :: (FromBULK a) => Context -> BULK -> Either String a
-fromBULKWith ctx bulk = runParser $ eval ctx bulk >>= parseBULK
+fromBULKWith :: (Members [Error String, Output Warning] r, FromBULK a) => Context -> BULK -> Sem r a
+fromBULKWith ctx bulk = do
+    evaled <- eval ctx bulk
+    runParser $ parseBULK evaled
 
-decode :: (FromBULK a) => Context -> ByteString -> Either String a
+decode :: (FromBULK a) => (Members [Error String, Output Warning] r) => Context -> ByteString -> Sem r a
 decode ctx = parseStream >=> fromBULKWith ctx
 
-decodeNotation :: (FromBULK a) => Context -> Text -> Either String a
+decodeNotation :: (FromBULK a) => (Members [Error String, Output Warning] r) => Context -> Text -> Sem r a
 decodeNotation ctx = parseNotation >=> decode ctx
 
-decodeFile :: (HasCallStack, FromBULK a) => Context -> FilePath -> IO (Either String a)
+decodeFile :: (FromBULK a) => Context -> FilePath -> IOE r a
 decodeFile ctx path = do
     decoder <- represent decodeBinaryFile decodeNotationFile <$> (probeRepr path)
     decoder ctx path
 
-decodeBinaryFile :: (HasCallStack, FromBULK a) => Context -> FilePath -> IO (Either String a)
-decodeBinaryFile ctx path = leftIn path . decode ctx <$> B.readFile path
+decodeBinaryFile :: (FromBULK a) => Context -> FilePath -> IOE r a
+decodeBinaryFile ctx path = placeError path $ decode ctx =<< readFileLBS path
 
-decodeNotationFile :: (HasCallStack, FromBULK a) => Context -> FilePath -> IO (Either String a)
+decodeNotationFile :: (FromBULK a) => Context -> FilePath -> IOE r a
 decodeNotationFile ctx file = do
     bulk <- parseNotationFile file
-    pure $ leftIn file $ fromBULKWith ctx bulk
+    placeError file $ fromBULKWith ctx bulk
 
-loadNotationFiles :: (HasCallStack) => Context -> [FilePath] -> IO Context
+loadNotationFiles :: Context -> [FilePath] -> IOE r Context
 loadNotationFiles = foldM loadNotationFile
   where
     loadNotationFile ctx file = do
         bulk <- parseNotationFile file
-        failLeftIn file $ execContext ctx bulk
+        placeError file $ execContext ctx bulk
 
 (<*:>) :: Namespace -> Text -> Parser a -> BULK -> Parser a
 ns <*:> name = withForm (ns .: name)
@@ -124,7 +124,8 @@ list = do
             traverse parseBULK xs
 
 parseString :: BULK -> Parser String
-parseString bulk = unpack <$> parseText bulk
+parseString bulk =
+    errorToFail $ unpack <$> parseText bulk
 
 string :: Parser String
 string = withNext parseString
@@ -155,10 +156,10 @@ instance FromBULK BULK where
 instance (FromBULK a) => FromBULK [a] where
     parseBULK = withSequence list
 
-type Parser a = Sem '[State (Maybe [BULK]), Fail, Error String, Output Warning] a
+type Parser a = Sem '[State (Maybe [BULK]), Fail] a
 
-runParser :: Parser a -> Either String a
-runParser = run . runWarningsAndError . failToError id . evalState Nothing
+runParser :: (Member (Error String) r) => Parser a -> Sem r a
+runParser = either throw pure . run . runFail . evalState Nothing
 
 (.:) :: Namespace -> Text -> MatchBULK
 (.:) ns1@(Namespace{mnemonic}) mnemonic1 =

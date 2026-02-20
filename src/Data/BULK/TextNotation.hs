@@ -2,7 +2,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE NoFieldSelectors #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
@@ -13,8 +12,7 @@ import Control.Monad.State (MonadState (..), State, evalState, gets, modify, run
 import Data.Bifunctor (first)
 import Data.Bits ((.|.))
 import Data.ByteString.Builder qualified as BB
-import Data.ByteString.Lazy (ByteString)
-import Data.ByteString.Lazy qualified as B
+import Data.ByteString.Lazy (LazyByteString)
 import Data.Functor (void, ($>))
 import Data.List (sortOn)
 import Data.List.NonEmpty (NonEmpty ((:|)))
@@ -29,6 +27,8 @@ import Data.Text.Encoding.Error (lenientDecode)
 import Data.Text.Lazy qualified as LT
 import Data.Text.Lazy.Encoding qualified as LTE
 import Data.Word (Word8)
+import Polysemy (Embed, Member, Sem, embed, runM)
+import Polysemy.Error (Error, runError, throw)
 import Text.Megaparsec (ErrorFancy (ErrorFail), MonadParsec (..), ParseError (FancyError), ParseErrorBundle (..), ParsecT, ShowErrorComponent (..), TraversableStream, VisualStream, choice, chunk, errorBundlePretty, optional, runParserT, single, some, (<|>))
 import Text.Megaparsec.Char (space1)
 import Text.Megaparsec.Char.Lexer qualified as L
@@ -37,7 +37,7 @@ import Witch (from)
 import Data.BULK.Decode (parseStream)
 import Data.BULK.Encode (encodeExpr, encodeNat)
 import Data.BULK.Types (BULK (..), Name (..), NamespaceID (CoreNS), Ref (..), Value (..))
-import Data.BULK.Utils (failLeft, failLeftIn)
+import Data.BULK.Utils (IOE, placeError, readFileLBS)
 import Data.Char (isSpace)
 
 data NotationNS = NotationNS {namespace :: NamespaceID, usedNames :: Map Text Word8, availableNames :: [Word8]}
@@ -46,28 +46,28 @@ data NamespaceMap = NamespaceMap {usedNamespaces :: Map Text NotationNS, nextMar
 
 type Parser = ParsecT String Text (State NamespaceMap)
 
-parseNotation :: Text -> Either String ByteString
+parseNotation :: (Member (Error String) r) => Text -> Sem r LazyByteString
 parseNotation =
     parseNotationNamed ""
 
-parseNotationNamed :: String -> Text -> Either String ByteString
+parseNotationNamed :: (Member (Error String) r) => String -> Text -> Sem r LazyByteString
 parseNotationNamed name source =
     BB.toLazyByteString <$> runParser showFail name notationP source
 
-parseNotationFile :: FilePath -> IO BULK
+parseNotationFile :: FilePath -> IOE r BULK
 parseNotationFile = parseNotationFileInto parseStream
 
-parseNotationFileBin :: FilePath -> IO ByteString
-parseNotationFileBin = parseNotationFileInto Right
+parseNotationFileBin :: FilePath -> IOE r LazyByteString
+parseNotationFileBin = parseNotationFileInto pure
 
-parseNotationFileInto :: (ByteString -> Either String a) -> FilePath -> IO a
-parseNotationFileInto convert file = do
-    text <- readTextFile file
-    failLeftIn file $ parseNotationNamed file text >>= convert
+parseNotationFileInto :: (LazyByteString -> Sem r a) -> FilePath -> IOE r a
+parseNotationFileInto convert file = placeError file $ do
+    bytes <- readTextFile file >>= parseNotationNamed file
+    convert bytes
 
-readTextFile :: FilePath -> IO Text
+readTextFile :: FilePath -> IOE r Text
 readTextFile file = do
-    bytes <- B.readFile file
+    bytes <- readFileLBS file
     pure $ LT.toStrict $ LTE.decodeUtf8With lenientDecode bytes
 
 notationP :: Parser BB.Builder
@@ -220,16 +220,21 @@ lowHalfBytes = [0x0 .. 0xF] ++ [0xA .. 0xF]
 highHalfBytes = [0x00, 0x10 .. 0xF0] ++ [0xA0, 0xB0 .. 0xF0]
 
 tryEncode :: BULK -> Parser BB.Builder
-tryEncode = failLeft . encodeExpr
+tryEncode = runDecode . encodeExpr
 
 testP :: Parser Int
 testP = choice (zipWith mkParser ["foo-bar", "foo"] [1, 2]) <* eof
   where
     mkParser text int = try $ chunk text $> int
 
-runParser :: (ParseErrorBundle Text String -> String) -> String -> Parser a -> Text -> Either String a
+runDecode :: (MonadFail m) => Sem '[Error String, Embed m] a -> m a
+runDecode action = runM do
+    result <- runError action
+    either (embed . fail) pure result
+
+runParser :: (Member (Error String) r) => (ParseErrorBundle Text String -> String) -> String -> Parser a -> Text -> Sem r a
 runParser mapError name parser =
-    first mapError . flip evalState bulkProfile . runParserT parser name
+    either throw pure . first mapError . flip evalState bulkProfile . runParserT parser name
 
 runParserM :: (MonadState NamespaceMap m) => (ParseErrorBundle Text String -> String) -> Parser a -> Text -> m (Either String a)
 runParserM mapError parser text = do
@@ -238,4 +243,4 @@ runParserM mapError parser text = do
 
 debugParse :: (Show a) => Parser a -> Text -> IO ()
 debugParse parser text = do
-    putStrLn $ either id show (runParser errorBundlePretty "debug" parser text)
+    putStrLn $ either id show (runM $ runError $ runParser errorBundlePretty "debug" parser text)

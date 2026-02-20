@@ -1,7 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE TypeApplications #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Test.BULK where
@@ -16,6 +14,8 @@ import Data.Foldable (traverse_)
 import Data.Functor (($>))
 import Data.Text (Text)
 import Data.Word (Word8)
+import Polysemy (Sem, run)
+import Polysemy.Error (Error)
 import System.Random (Random)
 import Test.Hspec
 import Test.QuickCheck (Gen, Property, arbitrary, choose, forAll, listOf, resize)
@@ -25,9 +25,12 @@ import Prelude hiding (words)
 
 import Data.BULK (BULK (Array, Form, Reference), Name (..), Ref (..), Value (..), encode, encodeNat, getExpression, parseLazy, parseNotation, parseStreamV1, toIntegral, _Int, _Nat, pattern Nat)
 import Data.BULK.Debug (Debug (..))
+import Data.BULK.Types (Warning)
+import Data.BULK.Utils (runWarningsAndError)
+import Polysemy.Output (Output)
 
 readFailsOn :: Word8 -> Expectation
-readFailsOn word = word `shouldSatisfy` (\w -> isLeft $ parseLazy getExpression $ cons w "\0\0")
+readFailsOn word = word `shouldSatisfy` (\w -> isLeft $ runAll $ parseLazy getExpression $ cons w "\0\0")
 
 shouldFail :: (Show a, Show b) => Either a b -> Expectation
 shouldFail result = result `shouldSatisfy` isLeft
@@ -48,7 +51,7 @@ shouldParseTo :: ByteString -> BULK -> Expectation
 words `shouldParseTo` expr = parseExpr words `shouldBeRight` expr
 
 parseExpr :: ByteString -> Either String BULK
-parseExpr = parseLazy getExpression
+parseExpr = runAll . parseLazy getExpression
 
 tryPrism :: Prism' a b -> Either String a -> Either String b
 tryPrism prism_ = (>>= maybe (Left "can't convert") Right . preview prism_)
@@ -89,6 +92,9 @@ assertErrorCall action = handle handler $ action $> False
   where
     handler :: ErrorCall -> IO Bool
     handler _ = pure True
+
+runAll :: Sem [Error String, Output Warning] a -> Either String a
+runAll = run . runWarningsAndError
 
 -- Arrays
 
