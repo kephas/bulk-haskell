@@ -40,8 +40,8 @@ import Data.BULK.Types (BULK (..), CheckDigest, Context (..), Name (..), Namespa
 import Data.BULK.Types qualified as Fun (LazyFunction (..))
 import Data.BULK.Types qualified as N (Name (..))
 import Data.BULK.Types qualified as NS (Namespace (..))
-import Data.BULK.Utils (bareNS, evalLocalState, insertIfMissing, runLocalState, runWarningsAndError, (<$$$>))
-import Polysemy.Output (Output, output)
+import Data.BULK.Utils (bareNS, evalLocalState, insertIfMissing, runLocalState, runWarningsAndError, warn, (<$$$>))
+import Polysemy.Output (Output)
 import Witch (from)
 
 eval :: (Members [Error String, Output Warning] r) => Context -> BULK -> Sem r BULK
@@ -208,9 +208,9 @@ importPackage base count expr = notYielding do
         (_, Just pkg) ->
             traverse_ (uncurry associateNS) $ zip (take count [base ..]) pkg.nsIDs
         (Form [Reference _, Array digest], Nothing) ->
-            output $ Warning [i|unknown package: #{debug digest}|]
+            warn [i|unknown package: #{debug digest}|]
         _ ->
-            output $ Warning "unknown weird package"
+            warn "unknown weird package"
 
 defineReference :: (Members [State Scope, Error String] r) => Ref -> BULK -> Sem r (Maybe BULK)
 defineReference ref expr = notYielding $ do

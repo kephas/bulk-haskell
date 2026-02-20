@@ -15,7 +15,7 @@ import Language.Haskell.TH (stringE)
 import Language.Haskell.TH.QuasiQuoter (QuasiQuoter (quoteExp), namedDefaultQuasiQuoter)
 import Polysemy (Member, Sem)
 import Polysemy.Error (Error, runError)
-import Polysemy.Output (Output, runOutputList)
+import Polysemy.Output (Output, output, runOutputList)
 import Polysemy.State (State, evalState, get)
 
 import Data.BULK.Types (Namespace (..), NamespaceID, Result (..), Warning (..))
@@ -39,6 +39,9 @@ appendWarnings [] str =
     str
 appendWarnings warnings str =
     str <> "\n" <> unlines (map (.unWarning) warnings)
+
+warn :: (Member (Output Warning) r) => String -> Sem r ()
+warn = output . Warning
 
 (<$$$>) :: (Functor f, Functor g, Functor h) => (a -> b) -> f (g (h a)) -> f (g (h b))
 (<$$$>) = fmap . fmap . fmap
