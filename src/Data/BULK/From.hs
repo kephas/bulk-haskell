@@ -80,13 +80,13 @@ withForm MatchBULK{..} parser (Form (op : content))
     | otherwise = fail [i|not the expected operator: (#{debug op}) (expected (#{expected}))|]
 withForm _ref _parser bulk = notExpected "form" bulk
 
-withFormCase :: [(MatchBULK, Parser a)] -> BULK -> Parser a
-withFormCase [] _bulk = fail "nothing matched"
-withFormCase ((matcher, parser) : rest) bulk@(Form (op : content)) =
+withFormCase :: Text -> [(MatchBULK, Parser a)] -> BULK -> Parser a
+withFormCase label [] _bulk = fail [i|nothing matched for: #{label}|]
+withFormCase label ((matcher, parser) : rest) bulk@(Form (op : content)) =
     if matcher.match op
         then raise $ evalState (Just content) parser
-        else withFormCase rest bulk
-withFormCase _matchers bulk = notExpected "form" bulk
+        else withFormCase label rest bulk
+withFormCase _label _matchers bulk = notExpected "form" bulk
 
 withNext :: (BULK -> Parser a) -> Parser a
 withNext = (nextBULK >>=)

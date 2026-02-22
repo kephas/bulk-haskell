@@ -18,6 +18,7 @@ import Data.List (find)
 import Data.Set qualified as S
 import Data.String.Interpolate (i)
 import Data.Text (Text)
+import Data.Text qualified as T
 import Data.Text.Encoding (encodeUtf8)
 import Polysemy (Member, Members, Sem, run)
 import Polysemy.Error (Error, runError, throw)
@@ -29,6 +30,7 @@ import Data.BULK.Core qualified as Core
 import Data.BULK.Encode (encode, encodeNat)
 import Data.BULK.Types (BULK (..), Context (..), Name (..), Namespace (..), NamespaceID (..), Ref (..), Warning)
 import Data.BULK.Utils (liftMaybe)
+import Data.ByteString (StrictByteString)
 import Data.Map.Strict qualified as M
 import Data.Maybe (mapMaybe)
 
@@ -97,8 +99,14 @@ instance (ToBULK a) => ToBULK [a] where
 instance ToBULK Text where
     encodeBULK = encodeBULK . B.fromStrict . encodeUtf8
 
+instance {-# OVERLAPPING #-} ToBULK [Char] where
+    encodeBULK = encodeBULK . T.pack
+
 instance ToBULK ByteString where
     encodeBULK = pure . Array
+
+instance ToBULK StrictByteString where
+    encodeBULK = encodeBULK . B.fromStrict
 
 type Encoder a = Sem '[Reader Context, Error String] a
 

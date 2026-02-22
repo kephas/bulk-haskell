@@ -51,6 +51,10 @@ pattern Core name <- (Reference (Ref CoreNS Name{index = name}))
     where
         Core name = bareRef 0x10 name
 
+bulkToList :: BULK -> [BULK]
+bulkToList (Form exprs) = exprs
+bulkToList bulk = [bulk]
+
 runWarningsAndError :: Sem (Error String : Output Warning : r) a -> Sem r (Either String a)
 runWarningsAndError action = do
     (warnings, result) <- runOutputList $ runError action
@@ -77,6 +81,10 @@ readFileLBS path =
 readFileBS :: FilePath -> IOE r StrictByteString
 readFileBS path =
     tryIO $ BS.readFile path
+
+writeFileLBS :: FilePath -> LazyByteString -> IOE r ()
+writeFileLBS path content =
+    tryIO $ BL.writeFile path content
 
 tryIO :: IO a -> IOE r a
 tryIO action = embed (try @SomeException action) >>= either (throw . displayException) pure

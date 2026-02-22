@@ -5,12 +5,15 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# OPTIONS_GHC -Wno-x-partial #-}
 
+import Control.Exception (bracket)
 import Data.ByteString.Lazy (ByteString, pack, singleton)
 import Data.Foldable (for_, traverse_)
 import Data.Function (on)
 import Data.List (nubBy)
 import Data.String.Interpolate (i)
 import Data.Text (Text)
+import System.Directory (removeFile, withCurrentDirectory)
+import System.IO (hClose, openTempFile)
 import Test.Hspec
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck (chooseInt, elements, forAll, vectorOf)
@@ -210,14 +213,26 @@ spec = describe "BULK" $ do
         describe "BARK" $ do
             it "reads a manifest" $ do
                 Right ctx <- loadNotationFiles ctx0 ["test/bulk/config/bark-alpha.bulktext"]
-                decodeNotationFile ctx "test/bulk/manifest.bulktext"
+                decodeFile ctx "test/bulk/manifest-bad.bulk"
                     `shouldReturnRight` BARK.BARK
-                        [ BARK.Description "nesting.bulk" $ BARK.Shake128 [hex|A9624CB8FD374AE1D2D1537DC94B766A29AA38CD3AB958AF9BF80E05BB291818|]
-                        , BARK.Description "primitives.bulk" $ BARK.Shake128 [hex|A1ABD6CF9F45CFB7967570CC796CC085872257891DE1DC3D2FB277555E156CC0|]
-                        , BARK.Description "missing version.bulk" $ BARK.MD5 [hex|93B885ADFE0DA089CDF634904FD59F71|]
+                        [ BARK.Description "nesting.bulk" $ BARK.Hash BARK.Shake128 [hex|A9624CB8FD374AE1D2D1537DC94B766A29AA38CD3AB958AF9BF80E05BB291818|]
+                        , BARK.Description "primitives.bulk" $ BARK.Hash BARK.Shake128 [hex|A1ABD6CF9F45CFB7967570CC796CC085872257891DE1DC3D2FB277555E156CC0|]
+                        , BARK.Description "missing version.bulk" $ BARK.Hash BARK.MD5 [hex|93B885ADFE0DA089CDF634904FD59F71|]
                         ]
-                BARK.verifyManifest ctx "test/bulk/manifest.bulktext" `shouldReturn` Right [BARK.OK "nesting.bulk", BARK.Failed "primitives.bulk" "expected digest A1ABD6CF9F45CFB7967570CC796CC085872257891DE1DC3D2FB277555E156CC0 but got A1ABD6CF9F45CFB7967570CC796CC085872257891DE1DC3D2FB277555E156CCB", BARK.OK "missing version.bulk"]
-                BARK.verifyManifest ctx "test/bulk/manifest.bulk" `shouldReturn` Right [BARK.OK "nesting.bulk", BARK.Failed "primitives.bulk" "expected digest A1ABD6CF9F45CFB7967570CC796CC085872257891DE1DC3D2FB277555E156CC0 but got A1ABD6CF9F45CFB7967570CC796CC085872257891DE1DC3D2FB277555E156CCB", BARK.OK "missing version.bulk"]
+                BARK.verifyManifest ctx "test/bulk/manifest-bad.bulktext" `shouldReturn` Right [BARK.OK "nesting.bulk", BARK.Failed "primitives.bulk" "expected digest A1ABD6CF9F45CFB7967570CC796CC085872257891DE1DC3D2FB277555E156CC0 but got A1ABD6CF9F45CFB7967570CC796CC085872257891DE1DC3D2FB277555E156CCB", BARK.OK "missing version.bulk"]
+                BARK.verifyManifest ctx "test/bulk/manifest-bad.bulk" `shouldReturn` Right [BARK.OK "nesting.bulk", BARK.Failed "primitives.bulk" "expected digest A1ABD6CF9F45CFB7967570CC796CC085872257891DE1DC3D2FB277555E156CC0 but got A1ABD6CF9F45CFB7967570CC796CC085872257891DE1DC3D2FB277555E156CCB", BARK.OK "missing version.bulk"]
+            it "creates a manifest" $ do
+                Right ctx <- loadNotationFiles ctx0 ["test/bulk/config/bark-alpha.bulktext"]
+                withCurrentDirectory "test/" $ do
+                    withTempFile "./" "manifest.bulk" \path -> do
+                        BARK.createManifest ctx path ["bulk/nesting.bulk", "bulk/primitives.bulk", "bulk/missing version.bulk"] `shouldReturnRight` ()
+                        decodeFile ctx path
+                            `shouldReturnRight` BARK.BARK
+                                [ BARK.Description "bulk/nesting.bulk" $ BARK.Hash BARK.Shake128 [hex|A9624CB8FD374AE1D2D1537DC94B766A29AA38CD3AB958AF9BF80E05BB291818|]
+                                , BARK.Description "bulk/primitives.bulk" $ BARK.Hash BARK.Shake128 [hex|A1ABD6CF9F45CFB7967570CC796CC085872257891DE1DC3D2FB277555E156CCB|]
+                                , BARK.Description "bulk/missing version.bulk" $ BARK.Hash BARK.Shake128 [hex|0B784469A0628E03861CD8A196DFAFA0E9E8056D04CDDCC49F0746B9AD43CCB2|]
+                                ]
+                        BARK.verifyManifest ctx path `shouldReturnRight` [BARK.OK "bulk/nesting.bulk", BARK.OK "bulk/primitives.bulk", BARK.OK "bulk/missing version.bulk"]
 
     describe "slow tests" $ do
         prop "reads really big generic arrays" $ test_bigger_arrays_decoding 3
@@ -336,3 +351,12 @@ instance FromBULK Bar where
 
 matchTo :: (HasCallStack, ToBULK a) => [(a, BULK)] -> IO ()
 matchTo = traverse_ (uncurry $ shouldBeRight . toBULK mempty)
+
+withTempFile :: FilePath -> String -> (FilePath -> IO a) -> IO a
+withTempFile dir template =
+    bracket openTempUnlocked removeFile
+  where
+    openTempUnlocked = do
+        (path, handle) <- openTempFile dir template
+        hClose handle
+        return path

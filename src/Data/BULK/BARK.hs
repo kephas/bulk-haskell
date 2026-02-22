@@ -15,11 +15,14 @@ import Data.String.Interpolate (i)
 import System.FilePath (takeDirectory, (</>))
 import Prelude hiding (words)
 
-import Data.BULK (CheckDigest (..), Context, FromBULK (..), Name (..), Namespace (..), NamespaceID (..), Ref (..), Value (..), hex, list, nextBULK, string, withFormCase, (.:), (<*:>), (<:>))
+import Data.BULK (CheckDigest (..), Context, FromBULK (..), Name (..), Namespace (..), NamespaceID (..), Ref (..), ToBULK (encodeBULK), Value (..), hex, list, namedRef, nextBULK, string, withFormCase, (.:), (<*:>), (<:>))
 import Data.BULK.API (runAllIO)
-import Data.BULK.Debug (debug)
+import Data.BULK.Debug (Debug, debug)
 import Data.BULK.From (decodeFile)
-import Data.BULK.Utils (IOE, readFileBS)
+import Data.BULK.To (encodeStream, toBULK)
+import Data.BULK.Types (BULK (..))
+import Data.BULK.Utils (IOE, bulkToList, readFileBS, writeFileLBS)
+import Polysemy.Reader (runReader)
 
 newtype BARK = BARK [Entry]
     deriving (Eq, Show)
@@ -28,8 +31,10 @@ data Entry = Description {path :: FilePath, hash :: Hash}
     deriving (Eq, Show)
 
 data Hash
-    = Shake128 StrictByteString
-    | MD5 StrictByteString
+    = Hash {alg :: HashAlg, digest :: StrictByteString}
+    deriving (Eq, Show)
+
+data HashAlg = Shake128 | MD5
     deriving (Eq, Show)
 
 data Verification
@@ -45,9 +50,10 @@ verifyManifest ctx file = runAllIO do
 verifyManifestEntry :: FilePath -> Entry -> IOE r Verification
 verifyManifestEntry root entry = do
     content <- readFileBS $ root </> entry.path
-    let (entryDigest, fileDigest) = case entry.hash of
-            Shake128 digest -> (digest, toBS $ Hash.hashWith (Hash.SHAKE128 :: Hash.SHAKE128 256) content)
-            MD5 digest -> (digest, toBS $ Hash.hashWith Hash.MD5 content)
+    let entryDigest = entry.hash.digest
+        fileDigest = case entry.hash.alg of
+            Shake128 -> hashShake128 content
+            MD5 -> hashMD5 content
     pure $
         if entryDigest `eq` fileDigest
             then
@@ -55,9 +61,30 @@ verifyManifestEntry root entry = do
             else
                 Failed entry.path [i|expected digest #{debug entryDigest} but got #{debug fileDigest}|]
 
+createManifest :: Context -> FilePath -> [FilePath] -> IO (Either String ())
+createManifest ctx manifestPath files = runAllIO $ runReader ctx do
+    manifest <- BARK <$> traverse makeManifestEntry files
+    bulk <- toBULK manifest
+    binary <- encodeStream $ bulkToList bulk
+    writeFileLBS manifestPath binary
+
+makeManifestEntry :: FilePath -> IOE r Entry
+makeManifestEntry path = do
+    let alg = Shake128
+    digest <- hashShake128 <$> readFileBS path
+    let hash = Hash{..}
+    pure Description{..}
+
 displayVerification :: Verification -> String
 displayVerification OK{path} = [i|#{path}: ✅|]
 displayVerification Failed{path, reason} = [i|#{path}: 🛑 (#{reason})|]
+
+hashShake128, hashMD5 :: (ByteArrayAccess ba) => ba -> StrictByteString
+hashShake128 = hashBS (Hash.SHAKE128 :: Hash.SHAKE128 256)
+hashMD5 = hashBS Hash.MD5
+
+hashBS :: (ByteArrayAccess ba, Hash.HashAlgorithm alg) => alg -> ba -> StrictByteString
+hashBS alg = toBS . Hash.hashWith alg
 
 toBS :: (ByteArrayAccess ba) => ba -> StrictByteString
 toBS = convert
@@ -78,9 +105,35 @@ instance FromBULK Entry where
 instance FromBULK Hash where
     parseBULK =
         withFormCase
-            [ (bark .: "shake128", Shake128 <$> nextBULK)
-            , (bark .: "md5", MD5 <$> nextBULK)
+            "hash"
+            [ (bark .: "shake128", Hash Shake128 <$> nextBULK)
+            , (bark .: "md5", Hash MD5 <$> nextBULK)
             ]
+
+instance ToBULK BARK where
+    encodeBULK (BARK entries) = do
+        barkOp <- namedRef "bark" "bark"
+        Form . (barkOp :) <$> traverse encodeBULK entries
+
+instance ToBULK Entry where
+    encodeBULK Description{..} = do
+        descOp <- namedRef "bark" "description"
+        metadataOp <- namedRef "bark" "metadata"
+        aboutOp <- namedRef "bark" "about"
+        pathExpr <- form2 <$> namedRef "bark" "path" <*> encodeBULK path
+        hashExpr <- form2 <$> namedRef "bark" "hash" <*> encodeBULK hash
+        pure $ Form [descOp, Form [metadataOp, Form [aboutOp, pathExpr], hashExpr]]
+
+instance ToBULK Hash where
+    encodeBULK Hash{..} =
+        form2 <$> encodeBULK alg <*> encodeBULK digest
+
+instance ToBULK HashAlg where
+    encodeBULK Shake128 = namedRef "bark" "shake128"
+    encodeBULK MD5 = namedRef "bark" "md5"
+
+form2 :: BULK -> BULK -> BULK
+form2 operator operand = Form [operator, operand]
 
 hash0 :: Namespace
 hash0 =
@@ -100,3 +153,9 @@ bark =
 
 forceHead :: [a] -> a
 forceHead = fst . fromJust . uncons
+
+instance Debug BARK where
+    debug (BARK entries) = [i|(BARK #{debug entries})|]
+
+instance Debug Entry where
+    debug Description{path, hash = Hash{alg, digest}} = [i|(#{path}: #{alg}=#{debug digest}|]

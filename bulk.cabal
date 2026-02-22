@@ -62,6 +62,7 @@ library
     , bytestring
     , containers
     , crypton
+    , directory
     , extra
     , filepath
     , hex
@@ -103,6 +104,7 @@ executable bulk-cli
     , bits
     , bulk
     , bytestring
+    , directory
     , filepath
     , lens
     , optparse-simple
@@ -143,6 +145,7 @@ test-suite bulk-test
     , bulk
     , bytestring
     , digits
+    , directory
     , filepath
     , hspec
     , lens
@@ -151,6 +154,7 @@ test-suite bulk-test
     , quickcheck-instances
     , random
     , string-interpolate
+    , temporary
     , text
     , witch
   default-language: Haskell2010

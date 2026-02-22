@@ -23,6 +23,7 @@ dependencies:
 - binary
 - bits
 - bytestring
+- directory
 - filepath
 - lens
 - polysemy
@@ -94,3 +95,4 @@ tests:
     - quickcheck-instances
     - QuickCheck
     - random
+    - temporary
