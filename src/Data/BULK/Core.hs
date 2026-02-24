@@ -29,8 +29,8 @@ pattern Define = Core 0x04
 pattern Mnemonic = Core 0x05
 pattern True = Core 0x0E
 pattern False = Core 0x0F
-pattern UnsignedInt = Core 0x13
-pattern SignedInt = Core 0x14
+pattern UnsignedInt = Core 0x14
+pattern SignedInt = Core 0x15
 pattern Trace = Core 0xD0
 
 version :: Int -> Int -> BULK
