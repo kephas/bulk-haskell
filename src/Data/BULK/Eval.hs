@@ -153,12 +153,12 @@ coreVersion, coreImport, coreDefine, coreMnemonic, coreTrace :: (Members [State 
 coreVersion [Nat @Int _, Nat @Int _] =
     noYield
 coreVersion _ = throw TypeMismatch
-coreImport [Nat base, Nat count, expr] =
-    importPackage base count expr
 coreImport [Nat marker, Form [Core.Namespace, expr]] = do
     importNS marker expr
-coreImport [Nat base, Form [Core.Package, expr, Nat count]] =
-    importPackage base count expr
+coreImport [Nat base, Form [Core.Package, expr], Nat count] =
+    importPackage base count 1 expr
+coreImport [Nat base, Form [Core.Package, expr], Nat count, Nat increment] =
+    importPackage base count increment expr
 coreImport _ = throw TypeMismatch
 coreDefine [Reference ref, expr] =
     defineReference ref expr
@@ -193,13 +193,13 @@ evalExpr1 :: (Members [State Scope, Output Warning, Error String] r) => BULK -> 
 evalExpr1 expr =
     fromMaybe expr <$> evalExpr expr
 
-importPackage :: (Members [State Scope, Output Warning, Error String] r) => Int -> Int -> BULK -> Sem r (Maybe BULK)
-importPackage base count expr = notYielding do
+importPackage :: (Members [State Scope, Output Warning, Error String] r) => Int -> Int -> Int -> BULK -> Sem r (Maybe BULK)
+importPackage base count increment expr = notYielding do
     qualifiedExpr <- evalExpr1 expr
     mayPkg <- gets (find (matchOn qualifiedExpr) . view knownPackages)
     case (qualifiedExpr, mayPkg) of
         (_, Just pkg) ->
-            traverse_ (uncurry associateNS) $ zip (take count [base ..]) pkg.nsIDs
+            traverse_ (uncurry associateNS) $ zip (take count [base, base + increment ..]) pkg.nsIDs
         (Form [Reference _, Array digest], Nothing) ->
             warn [i|unknown package: #{debug digest}|]
         _ ->

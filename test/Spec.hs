@@ -166,12 +166,12 @@ spec = describe "BULK" $ do
                 decodeNotationFile @[()] ctx0 "config/hash0.bulktext" `shouldReturnRight` []
             it "can bootstrap packages" $ do
                 Right ctx <- loadNotationFiles ctx0 ["test/bulk/config/foo.bulktext", "test/bulk/config/bar.bulktext", "test/bulk/config/foobar.bulktext"]
-                decodeNotation ctx "( version 1 0 ) ( import 20 ( package ( 0x16-00 #[4] 0xB4475636 ) 3 ) ) ( bar:bar ( bar:int 2 ) ( bar:foo ( foo:foo true true 99 ) ) )" `shouldBeRight` [Bar 2 (Foo True True 99)]
+                decodeNotation ctx "( version 1 0 ) ( import 20 ( package ( 0x16-00 #[4] 0xB4475636 ) ) 3 ) ( bar:bar ( bar:int 2 ) ( bar:foo ( foo:foo true true 99 ) ) )" `shouldBeRight` [Bar 2 (Foo True True 99)]
             it "has verifiable packages" $ do
                 decodeNotationFile @[()] ctx0 "test/bulk/package-bad.bulktext" `shouldReturn` Left "test/bulk/package-bad.bulktext: verification failed for package (expected digest 0000000000000000000000000000000000000000000000000000000000000000 but got 7a6dcf4b2cf07e63b60b893c6ac193b55ce38857e18148afc5b113189324747c)"
             it "warns of missing packages" $ do
                 Right ctx <- loadNotationFiles ctx0 ["test/bulk/config/foo.bulktext", "test/bulk/config/bar.bulktext", "test/bulk/config/foobar.bulktext"]
-                decodeNotation @[Bar] ctx "( version 1 0 ) ( import 20 ( namespace ( hash0:shake128 #[4] 0x9DBFD602 ) ) ) ( import 21 ( package ( hash0:shake128 w6[0] ) 2 ) ) ( bar:bar ( bar:int 1 ) ( bar:foo ( foo:foo false true 42 ) ) )" `shouldBe` Left [i|not the expected operator: ({21}:0) (expected (bar:bar))\nunknown package: 00\n|]
+                decodeNotation @[Bar] ctx "( version 1 0 ) ( import 20 ( namespace ( hash0:shake128 #[4] 0x9DBFD602 ) ) ) ( import 21 ( package ( hash0:shake128 w6[0] ) ) 2 ) ( bar:bar ( bar:int 1 ) ( bar:foo ( foo:foo false true 42 ) ) )" `shouldBe` Left [i|not the expected operator: ({21}:0) (expected (bar:bar))\nunknown package: 00\n|]
 
         --
         -- Parser monad
@@ -179,6 +179,7 @@ spec = describe "BULK" $ do
             it "parses Haskell values" $ do
                 Right ctx <- loadNotationFiles ctx0 ["test/bulk/config/foo.bulktext", "test/bulk/config/bar.bulktext", "test/bulk/config/foobar.bulktext"]
                 decodeNotation ctx "( version 1 0 ) ( import 20 ( namespace ( hash0:shake128 #[4] 0x9DBFD602 ) ) ) ( import 21 ( namespace ( hash0:shake128 #[4] 0x37B6D258 ) ) ) ( foo:foo false true 42 )" `shouldBeRight` [Foo False True 42]
+                decodeNotation ctx "( version 1 0 ) ( import 20 ( package ( 0x1800 #[4] 0xB4475636 ) ) 3 2 ) ( 0x1400 ( 0x1401 1 ) ( 0x1402 ( 0x1600 false true 42 ) ) )" `shouldBeRight` [Bar 1 $ Foo False True 42]
                 decodeNotation @[Foo] ctx "( import 20 ( namespace ( hash0:shake128 #[4] 0x9DBFD602 ) ) ) ( import 21 ( namespace ( hash0:shake128 #[4] 0x37B6D258 ) ) ) ( foo:foo false true 42 )" `shouldBe` Left "missing version"
                 decodeNotation @[Foo] ctx "( version 1 0 ) ( import 20 ( namespace ( hash0:shake128 #[4] 0x9DBFD602 ) ) ) ( import 21 ( namespace ( hash0:shake128 #[4] 0x37B6D258 ) ) ) ( foo:foo false true nil )" `shouldBe` Left "cannot parse as integer: nil"
                 decodeNotation @[Foo] ctx "( version 1 0 ) ( import 20 ( namespace ( hash0:shake128 #[4] 0x9DBFD602 ) ) ) ( import 21 ( namespace ( hash0:shake128 #[4] 0x37B6D258 ) ) ) ( foo:foo false true )" `shouldBe` Left "no next BULK expression"
@@ -186,7 +187,7 @@ spec = describe "BULK" $ do
                 decodeFile ctx "test/bulk/foo-list.bulk" `shouldReturnRight` [Foo True True 1, Foo True False 1, Foo False True 2, Foo False False 3, Foo True True 5, Foo False False 8]
                 decodeNotationFile ctx "test/bulk/foo-list.bulktext" `shouldReturnRight` [Foo True True 1, Foo True False 1, Foo False True 2, Foo False False 3, Foo True True 5, Foo False False 8]
                 decodeNotation ctx "( version 1 0 ) ( import 20 ( namespace ( hash0:shake128 #[4] 0x9DBFD602 ) ) ) ( import 21 ( namespace ( hash0:shake128 #[4] 0x14AE0706 ) ) )  ( import 22 ( namespace ( hash0:shake128 #[4] 0x37B6D258 ) ) ) ( bar:bar ( bar:int 1 ) ( bar:foo ( foo:foo false true 42 ) ) )" `shouldBeRight` [Bar 1 (Foo False True 42)]
-                decodeNotation ctx "( version 1 0 ) ( import 20 ( namespace ( hash0:shake128 #[4] 0x9DBFD602 ) ) ) ( define ( package ( hash0:shake128 #[4] 0x3C20F61C ) ) ([ nil ( hash0:shake128 #[4] 0x14AE0706 ) ( hash0:shake128 #[4] 0x37B6D258 ) ]) ) ( import 21 2 ( hash0:shake128 #[4] 0x3C20F61C ) ) ( bar:bar ( bar:int 1 ) ( bar:foo ( foo:foo false true 42 ) ) )" `shouldBeRight` [Bar 1 (Foo False True 42)]
+                decodeNotation ctx "( version 1 0 ) ( import 20 ( namespace ( hash0:shake128 #[4] 0x9DBFD602 ) ) ) ( define ( package ( hash0:shake128 #[4] 0x3C20F61C ) ) ([ nil ( hash0:shake128 #[4] 0x14AE0706 ) ( hash0:shake128 #[4] 0x37B6D258 ) ]) ) ( import 21 ( package ( hash0:shake128 #[4] 0x3C20F61C ) ) 2 ) ( bar:bar ( bar:int 1 ) ( bar:foo ( foo:foo false true 42 ) ) )" `shouldBeRight` [Bar 1 (Foo False True 42)]
 
         --
         -- Custom encoders

@@ -1,5 +1,5 @@
 ( version 1 0 )
-( import 20 ( package ( hash0:shake128 #[8] 0x0C029B183FBFA42D ) 2 ) )
+( import 20 ( package ( hash0:shake128 #[8] 0x0C029B183FBFA42D ) ) 2 )
 bark:bark
 ( bark:description
  ( bark:metadata
