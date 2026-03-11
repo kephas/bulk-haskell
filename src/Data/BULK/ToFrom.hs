@@ -15,13 +15,16 @@ import Control.Monad (foldM, (>=>))
 import Data.ByteString (StrictByteString, toStrict)
 import Data.ByteString.Lazy (ByteString)
 import Data.ByteString.Lazy qualified as B
+import Data.List (find)
+import Data.Set qualified as S
 import Data.String.Interpolate (i)
 import Data.Text (Text, unpack)
 import Data.Text.Encoding (encodeUtf8)
 import Polysemy (Member, Members, Sem, raise, run)
-import Polysemy.Error (Error, throw)
+import Polysemy.Error (Error, runError, throw)
 import Polysemy.Fail (Fail, runFail)
 import Polysemy.Output (Output)
+import Polysemy.Reader (Reader, ask, runReader)
 import Polysemy.State (State, evalState, get, put)
 
 import Data.BULK.Core (encodeInt)
@@ -32,13 +35,13 @@ import Data.BULK.Encode (encodeNat, pattern Nat)
 import Data.BULK.Eval (eval, execContext, mkContext, parseText)
 import Data.BULK.TextNotation (parseNotation, parseNotationFile)
 import Data.BULK.Types (BULK (..), Context (..), MatchBULK (..), Name (..), Namespace (..), Ref (..), Warning)
-import Data.BULK.Utils (IOE, errorToFail, placeError, probeRepr, readFileLBS, represent)
+import Data.BULK.Utils (IOE, errorToFail, liftMaybe, placeError, probeRepr, readFileLBS, represent)
 
 class FromBULK a where
     parseBULK :: BULK -> Parser a
 
 class ToBULK a where
-    toBULK :: a -> BULK
+    encodeBULK :: a -> Encoder BULK
 
 fromBULK :: (Members [Error String, Output Warning] r, FromBULK a) => BULK -> Sem r a
 fromBULK = fromBULKWith $ mkContext []
@@ -47,6 +50,15 @@ fromBULKWith :: (Members [Error String, Output Warning] r, FromBULK a) => Contex
 fromBULKWith ctx bulk = do
     evaled <- eval ctx bulk
     runParser $ parseBULK evaled
+
+toBULK :: (Members [Error String, Output Warning, Reader Context] r, ToBULK a) => a -> Sem r BULK
+toBULK value = do
+    ctx <- ask
+    runEncoder ctx $ encodeBULK value
+
+toBULKWith :: (Members [Error String, Output Warning] r, ToBULK a) => Context -> a -> Sem r BULK
+toBULKWith ctx value =
+    runReader ctx $ toBULK value
 
 decode :: (FromBULK a) => (Members [Error String, Output Warning] r) => Context -> ByteString -> Sem r a
 decode ctx = parseStream >=> fromBULKWith ctx
@@ -169,20 +181,32 @@ runParser = either throw pure . run . runFail . evalState Nothing
     match _bulk = False
     expected = [i|#{mnemonic}:#{mnemonic1}|]
 
+askName :: (Members [Error String, Reader Context] r) => Text -> Text -> Sem r BULK
+askName nsMnemonic nameMnemonic = do
+    ctx <- ask
+    ns <- liftMaybe [i|no namespace #{nsMnemonic}|] $ S.lookupMin $ S.filter ((== nsMnemonic) . (.mnemonic)) $ ctx.namespaces
+    name <- liftMaybe [i|no name #{ns}:#{nameMnemonic}|] $ find ((== (Just nameMnemonic)) . (.mnemonic)) ns.names
+    pure $ Reference $ Ref ns.matchID name
+
 instance ToBULK Bool where
-    toBULK True = Core.True
-    toBULK False = Core.False
+    encodeBULK True = pure Core.True
+    encodeBULK False = pure Core.False
 
 instance ToBULK Int where
-    toBULK num
-        | num >= 0 = encodeNat num
-        | otherwise = encodeInt num
+    encodeBULK num
+        | num >= 0 = pure $ encodeNat num
+        | otherwise = pure $ encodeInt num
 
 instance (ToBULK a) => ToBULK [a] where
-    toBULK = Form . map toBULK
+    encodeBULK xs = Form <$> traverse encodeBULK xs
 
 instance ToBULK Text where
-    toBULK = Array . B.fromStrict . encodeUtf8
+    encodeBULK = encodeBULK . B.fromStrict . encodeUtf8
 
 instance ToBULK ByteString where
-    toBULK = Array
+    encodeBULK = pure . Array
+
+type Encoder a = Sem '[Reader Context, Error String] a
+
+runEncoder :: (Member (Error String) r) => Context -> Encoder a -> Sem r a
+runEncoder ctx = either throw pure . run . runError . runReader ctx

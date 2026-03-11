@@ -109,6 +109,9 @@ placeError place action = do
   where
     addPlace err = [i|#{place}: #{err}|]
 
+liftMaybe :: (Member (Error e) r) => e -> Maybe a -> Sem r a
+liftMaybe err = maybe (throw err) pure
+
 errIn :: String -> Result a -> Result a
 errIn place = errMap \err -> [i|#{place}: #{err}|]
 

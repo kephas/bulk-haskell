@@ -322,4 +322,4 @@ instance FromBULK Bar where
         Bar <$> (bar <:> "int") nextBULK <*> (bar <:> "foo") nextBULK
 
 matchTo :: (HasCallStack, ToBULK a) => [(a, BULK)] -> IO ()
-matchTo = traverse_ (uncurry $ shouldBe . toBULK)
+matchTo = traverse_ (uncurry $ shouldBeRight . toBULK)

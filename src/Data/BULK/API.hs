@@ -2,6 +2,7 @@ module Data.BULK.API where
 
 import Data.BULK.Decode qualified as D
 import Data.BULK.Encode qualified as E
+import Data.BULK.Eval (mkContext)
 import Data.BULK.TextNotation qualified as TN
 import Data.BULK.ToFrom qualified as TF
 import Data.BULK.Types (BULK, Context, Warning)
@@ -46,6 +47,9 @@ parseNotationFileBin = runAllIO . TN.parseNotationFileBin
 
 fromBULK :: (TF.FromBULK a) => BULK -> Either String a
 fromBULK = runAll . TF.fromBULK
+
+toBULK :: (TF.ToBULK a) => a -> Either String BULK
+toBULK = runAll . TF.toBULKWith (mkContext [])
 
 decode :: (TF.FromBULK a) => Context -> LazyByteString -> Either String a
 decode ctx = runAll . TF.decode ctx
