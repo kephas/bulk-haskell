@@ -14,13 +14,12 @@ import Data.Text (Text)
 import Test.Hspec
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck (chooseInt, elements, forAll, vectorOf)
-import Witch (from, via)
+import Witch (from)
 import Prelude hiding (readFile)
 
 import Data.BULK
 import Data.BULK.BARK qualified as BARK
 import Data.BULK.Core qualified as Core
-import Data.BULK.Encode (pattern IntReference)
 import Data.BULK.Eval (mkContext)
 import Test.BULK
 import Test.QuickCheck.Instances.BULK (simpleBULK)
@@ -52,13 +51,13 @@ spec = describe "BULK" $ do
                 describe "read references" $ do
                     prop "reads one-word marker references" $
                         forAll anySimpleRefBytes $ \(marker, ref) ->
-                            pack [marker, ref] `shouldParseTo` Reference (Ref (via @Int marker) (from ref))
+                            pack [marker, ref] `shouldParseTo` bareRef (from marker) ref
                     prop "reads two-words marker references" $
                         forAll anySimpleRefBytes $ \(marker, ref) ->
-                            pack [0x7F, marker, ref] `shouldParseTo` Reference (Ref (from @Int $ 0x7F + fromIntegral marker) (from ref))
+                            pack [0x7F, marker, ref] `shouldParseTo` bareRef (0x7F + fromIntegral marker) ref
                     prop "reads three-words marker references" $
                         forAll anySimpleRefBytes $ \(marker, ref) ->
-                            pack [0x7F, 0xFF, marker, ref] `shouldParseTo` Reference (Ref (from @Int $ 0x7F + 0xFF + fromIntegral marker) (from ref))
+                            pack [0x7F, 0xFF, marker, ref] `shouldParseTo` bareRef (0x7F + 0xFF + fromIntegral marker) ref
                 it "rejects reserved markers" $
                     traverse_ readFailsOn reservedMarkers
             describe "files" $ do
@@ -72,8 +71,8 @@ spec = describe "BULK" $ do
                     readFileV1 "test/bulk/missing version.bulk" `shouldReturnRight` Form [Nil]
             describe "version and profile" $ do
                 it "checks for version 1.0" $ do
-                    parseStream "\x01\x10\x00\x81\x80\x02" `shouldBeRight` Form [Form [IntReference 16 0, 1, 0]]
-                    parseStream "\x01\x10\x00\x81\x82\x02" `shouldBeRight` Form [Form [IntReference 16 0, 1, 2]]
+                    parseStream "\x01\x10\x00\x81\x80\x02" `shouldBeRight` Form [Form [bareRef 0x10 0, 1, 0]]
+                    parseStream "\x01\x10\x00\x81\x82\x02" `shouldBeRight` Form [Form [bareRef 0x10 0, 1, 2]]
                     parseStream "\x01\x10\x00\x82\x80\x02" `shouldBe` Left "this application only supports BULK version 1.x"
                     parseStream "\x01\x10\x00\x81\x00\x00\x02" `shouldBe` Left "malformed version"
                     parseStream "\0" `shouldBe` Left "missing version"
@@ -82,7 +81,7 @@ spec = describe "BULK" $ do
         -- Encoding
         describe "encoding" $ do
             it "encodes primitives" $ do
-                encode [Nil, Form [], Array "", IntReference 16 0] `shouldBeRight` [hex|000102C01000|]
+                encode [Nil, Form [], Array "", bareRef 0x10 0] `shouldBeRight` [hex|000102C01000|]
             it "encodes natural numbers" $ do
                 map @Int encodeNat [0, 1, 0xFF, 0x100, 0xFFFF, 0x1_0000] `shouldBe` [Array "\0", Array "\1", Array "\xFF", Array "\1\0", Array "\xFF\xFF", Array "\0\1\0\0"]
                 map @Integer encodeNat [0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF] `shouldBe` [Array [hex|00000000FFFFFFFFFFFFFFFFFFFFFFFF|]]
@@ -97,7 +96,7 @@ spec = describe "BULK" $ do
                 "( )" `shouldDenote` [Form []]
                 "( nil )" `shouldDenote` [Form [Nil]]
                 "( nil ( nil nil ) nil )" `shouldDenote` [Form [Nil, Form [Nil, Nil], Nil]]
-                "foo:bar\n( )" `shouldDenote` [IntReference 0x14 0, Form []]
+                "foo:bar\n( )" `shouldDenote` [bareRef 0x14 0, Form []]
             it "parses small ints" $ for_ smallWords $ \word ->
                 [i|w6[#{word}]|] `shouldDenote` [Array $ singleton word]
             it "parses small arrays" $ do
@@ -115,7 +114,7 @@ spec = describe "BULK" $ do
             it "parses bulk core references" $ do
                 "version" `shouldDenote` [Core.Version]
                 "( version 1 0 ) true false ( import ( namespace ) ) ( import ( package ) )" `shouldDenote` [version 1 0, Core.True, Core.False, Form [Core.Import, Form [Core.Namespace]], Form [Core.Import, Form [Core.Package]]]
-                "( bulk:namespace 0x1400 #[4] 0x0011-2233 ) ( bulk:package 0x1400 )" `shouldDenote` [Form [Core.Namespace, IntReference 0x14 0, Array "\x00\x11\x22\x33"], Form [Core.Package, IntReference 0x14 0]]
+                "( bulk:namespace 0x1400 #[4] 0x0011-2233 ) ( bulk:package 0x1400 )" `shouldDenote` [Form [Core.Namespace, bareRef 0x14 0, Array "\x00\x11\x22\x33"], Form [Core.Package, bareRef 0x14 0]]
             it "parses UTF-8 strings" $ do
                 parseNotation [i|"foo"|] `shouldBeRight` "\xC3\&foo"
                 parseNotation [i|"foo" "quuux"|] `shouldBeRight` "\xC3\&foo\xC5quuux"
@@ -126,8 +125,8 @@ spec = describe "BULK" $ do
                 parseNotationFile "test/bulk/primitives.bulktext" `shouldReturn` primitives
                 parseNotationFile "test/bulk/bad nesting.bulktext" `shouldReturn` badNesting "test/bulk/bad nesting.bulktext"
             it "parses unknown references" $ do
-                "foo:bar quux:one foo:baz" `shouldDenote` (uncurry IntReference <$> [(0x14, 0), (0x15, 0), (0x14, 1)])
-                "123:one" `shouldDenote` [IntReference 0x14 0]
+                "foo:bar quux:one foo:baz" `shouldDenote` (uncurry bareRef <$> [(0x14, 0), (0x15, 0), (0x14, 1)])
+                "123:one" `shouldDenote` [bareRef 0x14 0]
             it "uses known mnemonics" $ do
                 Right ctx <- loadNotationFiles ctx0 ["test/bulk/123.bulktext"]
                 decodeNotationFile @[Int] ctx "test/bulk/321.bulktext" `shouldReturnRight` [1]
@@ -234,10 +233,10 @@ primitives =
                 , Array [hex|0100|]
                 , Array [hex|01000000|]
                 , Array [hex|0123456789ABCDEF|]
-                , IntReference 0x14 0x01
-                , IntReference 0x14 0x02
-                , IntReference 0x7E 0xFF
-                , IntReference (0x7F + 0xFF + 0xBC) 0x1A
+                , bareRef 0x14 0x01
+                , bareRef 0x14 0x02
+                , bareRef 0x7E 0xFF
+                , bareRef (0x7F + 0xFF + 0xBC) 0x1A
                 ]
             ]
 

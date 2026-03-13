@@ -4,11 +4,11 @@ module Test.QuickCheck.Instances.BULK where
 
 import Test.QuickCheck (Arbitrary (..), Gen, chooseInt, frequency, getSize, resize, sized)
 import Test.QuickCheck.Instances.ByteString ()
-import Witch.From (from)
 import Prelude hiding (words)
 
 import Data.BULK (BULK (..), Name (..), Ref (..), Value (..))
 import Data.BULK.Types (NamespaceID)
+import Data.BULK.Utils (bareNSID)
 
 instance Arbitrary BULK where
     arbitrary = bulk arbitrary
@@ -20,13 +20,13 @@ instance Arbitrary BULK where
         pure $ Reference newRef
 
 instance Arbitrary NamespaceID where
-    arbitrary = from <$> frequency [(4, chooseInt (0x10, 0x13)), (16, chooseInt (0x14, 0x7F)), (1, chooseInt (0x80, 0xFFFF))]
+    arbitrary = bareNSID <$> frequency [(4, chooseInt (0x10, 0x13)), (16, chooseInt (0x14, 0x7F)), (1, chooseInt (0x80, 0xFFFF))]
 
 instance Arbitrary Name where
     arbitrary = Name <$> arbitrary <*> pure Nothing <*> pure SelfEval
 
 simpleNS :: Gen NamespaceID
-simpleNS = from <$> chooseInt (0x14, 0x7F)
+simpleNS = bareNSID <$> chooseInt (0x14, 0x7F)
 
 simpleBULK :: Gen BULK
 simpleBULK = bulk simpleNS

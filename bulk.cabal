@@ -33,10 +33,11 @@ library
       Data.BULK.Decode
       Data.BULK.Encode
       Data.BULK.Eval
+      Data.BULK.From
       Data.BULK.Hash
       Data.BULK.Lens
       Data.BULK.TextNotation
-      Data.BULK.ToFrom
+      Data.BULK.To
       Data.BULK.Types
       Data.BULK.Utils
   other-modules:

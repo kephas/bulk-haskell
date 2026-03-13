@@ -61,25 +61,24 @@ instance Debug LBS.ByteString where
 
 instance Debug NamespaceID where
     debug CoreNS = "{core}"
-    debug TempNS = "{!}"
     debug (UnassociatedNS num) = [i|{#{num}}|]
     debug (MatchEq bulk) = [i|== #{debug bulk}|]
     debug (MatchNamePrefix num bs) = [i|{#{take 6 $ debug bs}~~<<:#{num}}|]
-    debug (MatchQualifiedNamePrefix (Ref (MatchNamePrefix _ hbs) Name{marker}) bs) = [i|{#{take 6 $ debug bs}~#{take 3 $ debug hbs}:#{debug marker}}|]
+    debug (MatchQualifiedNamePrefix (Ref (MatchNamePrefix _ hbs) Name{index}) bs) = [i|{#{take 6 $ debug bs}~#{take 3 $ debug hbs}:#{debug index}}|]
     debug (MatchQualifiedNamePrefix (Ref _id hname) bs) = [i|{~~~~:#{hname}/#{take 6 $ debug bs}}|]
 
 instance Debug Ref where
     debug (Ref ns name) = [i|#{debug ns}:#{shortName name}|]
 
 shortName :: Name -> String
-shortName Name{marker, mnemonic = Nothing} = debug marker
+shortName Name{index, mnemonic = Nothing} = debug index
 shortName Name{mnemonic = Just name} = debug name
 
 instance Debug Namespace where
     debug Namespace{..} = [i|#{mnemonic}(#{length names};#{debug matchID} ;; #{debug names})|]
 
 instance Debug Name where
-    debug Name{marker, mnemonic, value} = [i|#{marker}:#{fromMaybe "" mnemonic}#{debug value}|]
+    debug Name{index, mnemonic, value} = [i|#{index}:#{fromMaybe "" mnemonic}#{debug value}|]
 
 instance Debug Package where
     debug Package{..} = [i|{pkg (#{debug matchID}) #{debug nsIDs}|]

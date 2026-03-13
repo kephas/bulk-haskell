@@ -5,7 +5,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ViewPatterns #-}
 
-module Data.BULK.Encode (encode, pattern IntReference, encodeNat, pattern Nat, encodeExpr, unsafeEncodeBounded, boundedPutter)
+module Data.BULK.Encode (encode, encodeNat, pattern Nat, encodeExpr, unsafeEncodeBounded, boundedPutter)
 where
 
 import Data.Binary (Put, putWord8)
@@ -20,7 +20,6 @@ import Data.String.Interpolate (i)
 import Data.Word (Word8)
 import Polysemy (Member, Sem)
 import Polysemy.Error (Error, throw)
-import Witch (from, tryFrom)
 
 import Data.BULK.Debug (debug)
 import Data.BULK.Decode (toNat)
@@ -49,7 +48,7 @@ encodeExpr (Array bs)
     len = BS.length bs
 encodeExpr ref@(Reference (Ref ns name))
     | Just num <- numNS ns =
-        pure $ encodeNS num <> BB.word8 name.marker
+        pure $ encodeNS num <> BB.word8 name.index
     | otherwise =
         throw [i|not an encodable reference: #{debug ref}|]
 
@@ -61,15 +60,6 @@ numNS :: NamespaceID -> Maybe Int
 numNS CoreNS = Just 0x10
 numNS (UnassociatedNS num) = Just num
 numNS _ns = Nothing
-
-pattern IntReference :: Int -> Word8 -> BULK
-pattern IntReference ns num <- (toIntRef -> Just (ns, num))
-    where
-        IntReference ns num = Reference $ Ref (from ns) $ from num
-
-toIntRef :: BULK -> Maybe (Int, Word8)
-toIntRef (Reference (Ref ns name)) = either (const Nothing) (\marker -> Just (marker, name.marker)) $ tryFrom ns
-toIntRef _ = Nothing
 
 encodeNat :: (Integral a, Bits a) => a -> BULK
 encodeNat = unsafeEncodeBounded unsafePutWord64s natEncoders

@@ -23,11 +23,10 @@ import Data.Either.Extra (eitherToMaybe)
 import Data.Word (Word8)
 import Polysemy (Member, Sem)
 import Polysemy.Error (Error, throw)
-import Witch (from)
 import Prelude hiding (readFile)
 
-import Data.BULK.Types (BULK (..), Ref (..), pattern Core)
-import Data.BULK.Utils (IOE, placeError, readFileLBS)
+import Data.BULK.Types (BULK (..))
+import Data.BULK.Utils (IOE, bareRef, placeError, readFileLBS, pattern Core)
 
 -- | Syntax token
 data Syntax = FormEnd
@@ -79,7 +78,7 @@ getArray = do
 getReference :: Word8 -> Get BULK
 getReference marker = do
     ns <- bool getSpecial pure (marker < 0x7F) $ fromIntegral marker
-    Reference . Ref (from ns) . from <$> getWord8
+    bareRef ns <$> getWord8
   where
     getSpecial acc = do
         next <- getInt

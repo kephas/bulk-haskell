@@ -12,13 +12,14 @@ import Data.Binary.Put (putInt16be, putInt32be, putInt64be, putInt8)
 import Data.ByteString.Lazy qualified as BL
 import Data.Either.Extra (eitherToMaybe)
 import Data.Int (Int64)
+import Polysemy (run)
+import Polysemy.Error (runError)
 import Prelude hiding (False, True)
 
 import Data.BULK.Decode (parseLazy, toNat)
 import Data.BULK.Encode (boundedPutter, encodeNat, unsafeEncodeBounded)
-import Data.BULK.Types (BULK (..), pattern Core)
-import Polysemy (run)
-import Polysemy.Error (runError)
+import Data.BULK.Types (BULK (..))
+import Data.BULK.Utils (pattern Core)
 
 pattern Version, Namespace, Package, Import, Define, Mnemonic, True, False, UnsignedInt, SignedInt, Trace :: BULK
 pattern Version = Core 0x00

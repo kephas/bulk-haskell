@@ -36,7 +36,7 @@ import Data.BULK.Types (BULK (..), CheckDigest, Context (..), Name (..), Namespa
 import Data.BULK.Types qualified as Fun (LazyFunction (..))
 import Data.BULK.Types qualified as N (Name (..))
 import Data.BULK.Types qualified as NS (Namespace (..))
-import Data.BULK.Utils (bareNS, evalLocalState, insertIfMissing, runLocalState, warn, (<$$$>))
+import Data.BULK.Utils (emptyNS, evalLocalState, insertIfMissing, runLocalState, warn, (<$$$>))
 import Polysemy.Output (Output)
 import Witch (from)
 
@@ -101,12 +101,12 @@ retrieveExpression unqualifiedRef = do
 retrieveDefinition :: (Member (State Scope) r) => Prism' Value a -> Ref -> Sem r (Ref, Maybe a)
 retrieveDefinition prism ref = do
     qualRef <- qualifyRef ref
-    (qualRef,) <$> gets (preview $ knownNS qualRef.nsID . nsName qualRef.name.marker . to (.value) . prism)
+    (qualRef,) <$> gets (preview $ knownNS qualRef.nsID . nsName qualRef.name.index . to (.value) . prism)
 
 qualifyRef :: (Member (State Scope) r) => Ref -> Sem r Ref
 qualifyRef (Ref ns name) = do
     qualNS <- qualifyNS ns
-    qualName <- fromMaybe name <$> gets (^? knownNS qualNS . nsName name.marker)
+    qualName <- fromMaybe name <$> gets (^? knownNS qualNS . nsName name.index)
     pure $ Ref qualNS qualName
 
 qualifyNS :: (Member (State Scope) r) => NamespaceID -> Sem r NamespaceID
@@ -208,8 +208,8 @@ importPackage base count increment expr = notYielding do
 defineReference :: (Members [State Scope, Error String] r) => Ref -> BULK -> Sem r (Maybe BULK)
 defineReference ref expr = notYielding $ do
     qualRef <- qualifyRef ref
-    ensureNS $ bareNS qualRef.nsID
-    modify $ over (knownNS qualRef.nsID . setNsName qualRef.name.marker) $ changeValue $ qualRef.name{value = Expression expr}
+    ensureNS $ emptyNS qualRef.nsID
+    modify $ over (knownNS qualRef.nsID . setNsName qualRef.name.index) $ changeValue $ qualRef.name{value = Expression expr}
 
 changeValue :: Name -> Maybe Name -> Maybe Name
 changeValue name Nothing = Just name
@@ -230,7 +230,7 @@ defineBootstrappedNamespace digestRef nsDigest marker toDigest = do
             associateNS marker $ Just ns.matchID
             defineQualifiedNamespace (Ref ns.matchID digestRef.name) nsDigest marker toDigest
         Nothing -> do
-            ns <- evalNS marker toDigest $ Namespace TempNS "<unnamed>" []
+            ns <- evalNS marker toDigest $ Namespace (UnassociatedNS marker) "<unnamed>" []
             let mnemonic = ns.mnemonic
             throw [i|unable to bootstrap namespace: #{mnemonic}|]
 
@@ -280,7 +280,7 @@ definePackage digestRef pkgDigest defBytes = notYielding do
             foundNSS <- traverse findNS nss
             let pkgID =
                     if Just qualifiedRef.nsID `elem` foundNSS
-                        then MatchNamePrefix digestRef.name.marker pkgDigest
+                        then MatchNamePrefix digestRef.name.index pkgDigest
                         else MatchQualifiedNamePrefix qualifiedRef pkgDigest
             modify $ over knownPackages $ S.insert Package{matchID = pkgID, nsIDs = foundNSS}
         (Right (), bulk) ->
@@ -302,7 +302,7 @@ setRefMnemonic (Ref (UnassociatedNS marker) name) mnemonicB = notYielding do
     mnemonic <- parseText mnemonicB
     foundNS <- gets (getMarkerNS marker)
     whenJust foundNS \ns -> do
-        modify $ over (knownNamespaces . at ns.matchID . _Just . nameMap) $ M.alter (changeMnemonic $ Name name.marker (Just mnemonic) SelfEval) name.marker
+        modify $ over (knownNamespaces . at ns.matchID . _Just . nameMap) $ M.alter (changeMnemonic $ Name name.index (Just mnemonic) SelfEval) name.index
 setRefMnemonic _name _mnemonicB =
     throw "not implemented"
 
@@ -317,10 +317,10 @@ runMatchID :: NamespaceID -> BULK -> Bool
 runMatchID (MatchEq bulk1) bulk2 =
     bulk1 == bulk2
 runMatchID (MatchNamePrefix name fullDigest) (Form [Reference (Ref (UnassociatedNS _) name'), Array targetDigest])
-    | name == name'.marker =
+    | name == name'.index =
         toStrict targetDigest `isPrefixOf` toStrict fullDigest
 runMatchID nsID1@(MatchNamePrefix nameMarker1 fullDigest) (Form [Reference (Ref nsID2 name2), Array targetDigest])
-    | nsID1 == nsID2 && nameMarker1 == name2.marker =
+    | nsID1 == nsID2 && nameMarker1 == name2.index =
         toStrict targetDigest `isPrefixOf` toStrict fullDigest
 runMatchID (MatchNamePrefix _name _digest) _bulk =
     False
@@ -330,8 +330,6 @@ runMatchID (MatchQualifiedNamePrefix (Ref ns name) fullDigest) (Form [Reference 
 runMatchID (MatchQualifiedNamePrefix _name _digest) _bulk =
     False
 runMatchID CoreNS _ =
-    False
-runMatchID TempNS _ =
     False
 runMatchID (UnassociatedNS _) _ =
     False

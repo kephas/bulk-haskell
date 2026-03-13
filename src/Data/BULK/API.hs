@@ -3,8 +3,9 @@ module Data.BULK.API where
 import Data.BULK.Decode qualified as D
 import Data.BULK.Encode qualified as E
 import Data.BULK.Eval (mkContext)
+import Data.BULK.From qualified as From
 import Data.BULK.TextNotation qualified as TN
-import Data.BULK.ToFrom qualified as TF
+import Data.BULK.To qualified as To
 import Data.BULK.Types (BULK, Context, Warning)
 import Data.BULK.Utils (runWarningsAndError)
 import Data.ByteString.Lazy (LazyByteString)
@@ -43,31 +44,31 @@ parseNotationFile = runAllIO . TN.parseNotationFile
 parseNotationFileBin :: FilePath -> IO (Either String LazyByteString)
 parseNotationFileBin = runAllIO . TN.parseNotationFileBin
 
--- ToFrom
+-- From
 
-fromBULK :: (TF.FromBULK a) => BULK -> Either String a
-fromBULK = runAll . TF.fromBULK
+fromBULK :: (From.FromBULK a) => BULK -> Either String a
+fromBULK = runAll . From.fromBULK
 
-toBULK :: (TF.ToBULK a) => a -> Either String BULK
-toBULK = runAll . TF.toBULKWith (mkContext [])
+toBULK :: (To.ToBULK a) => a -> Either String BULK
+toBULK = runAll . To.toBULKWith (mkContext [])
 
-decode :: (TF.FromBULK a) => Context -> LazyByteString -> Either String a
-decode ctx = runAll . TF.decode ctx
+decode :: (From.FromBULK a) => Context -> LazyByteString -> Either String a
+decode ctx = runAll . From.decode ctx
 
-decodeNotation :: (TF.FromBULK a) => Context -> Text -> Either String a
-decodeNotation ctx = runAll . TF.decodeNotation ctx
+decodeNotation :: (From.FromBULK a) => Context -> Text -> Either String a
+decodeNotation ctx = runAll . From.decodeNotation ctx
 
-decodeFile :: (TF.FromBULK a) => Context -> FilePath -> IO (Either String a)
-decodeFile ctx = runAllIO . TF.decodeFile ctx
+decodeFile :: (From.FromBULK a) => Context -> FilePath -> IO (Either String a)
+decodeFile ctx = runAllIO . From.decodeFile ctx
 
-decodeBinaryFile :: (TF.FromBULK a) => Context -> FilePath -> IO (Either String a)
-decodeBinaryFile ctx = runAllIO . TF.decodeBinaryFile ctx
+decodeBinaryFile :: (From.FromBULK a) => Context -> FilePath -> IO (Either String a)
+decodeBinaryFile ctx = runAllIO . From.decodeBinaryFile ctx
 
-decodeNotationFile :: (TF.FromBULK a) => Context -> FilePath -> IO (Either String a)
-decodeNotationFile ctx = runAllIO . TF.decodeNotationFile ctx
+decodeNotationFile :: (From.FromBULK a) => Context -> FilePath -> IO (Either String a)
+decodeNotationFile ctx = runAllIO . From.decodeNotationFile ctx
 
 loadNotationFiles :: Context -> [FilePath] -> IO (Either String Context)
-loadNotationFiles ctx = runAllIO . TF.loadNotationFiles ctx
+loadNotationFiles ctx = runAllIO . From.loadNotationFiles ctx
 
 -- interpreters
 

@@ -20,10 +20,9 @@ import System.Random (Random)
 import Test.Hspec
 import Test.QuickCheck (Gen, Property, arbitrary, choose, forAll, listOf, resize)
 import Test.QuickCheck.Instances.ByteString ()
-import Witch (via)
 import Prelude hiding (words)
 
-import Data.BULK (BULK (Array, Form, Reference), Name (..), Ref (..), Value (..), encode, encodeNat, getExpression, parseLazy, parseNotation, parseStreamV1, toIntegral, _Int, _Nat, pattern Nat)
+import Data.BULK (BULK (Array, Form), bareRef, encode, encodeNat, getExpression, parseLazy, parseNotation, parseStreamV1, toIntegral, _Int, _Nat, pattern Nat)
 import Data.BULK.Debug (Debug (..))
 import Data.BULK.Types (Warning)
 import Data.BULK.Utils (runWarningsAndError)
@@ -135,7 +134,7 @@ anySimpleRefBytes = (,) <$> anySimpleMarker <*> arbitraryByte
 anySimpleRef :: Gen BULK
 anySimpleRef = do
     (ns, name) <- anySimpleRefBytes
-    pure $ Reference $ Ref (via @Int ns) $ Name (fromIntegral name) Nothing SelfEval
+    pure $ bareRef (fromIntegral ns) $ fromIntegral name
 
 -- Fixed ranges
 

@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TypeOperators #-}
 
@@ -22,8 +23,9 @@ import Polysemy.State (State, evalState, get)
 import System.IO (IOMode (ReadMode), withFile)
 
 import Control.Exception (SomeException, displayException, try)
-import Data.BULK.Types (Namespace (..), NamespaceID, Representation (..), Result (..), Warning (..))
+import Data.BULK.Types (BULK (..), Name (Name, index), Namespace (..), NamespaceID (..), Ref (..), Representation (..), Result (..), Warning (..), bareName)
 import Data.ByteString (StrictByteString)
+import Data.Word (Word8)
 import Polysemy.Embed (embed)
 import Polysemy.Fail (Fail)
 
@@ -33,8 +35,21 @@ hex = (namedDefaultQuasiQuoter "hex"){quoteExp = unhexM >=> stringE}
 insertIfMissing :: (Ord k) => k -> a -> M.Map k a -> M.Map k a
 insertIfMissing = M.insertWith (\_new old -> old)
 
-bareNS :: NamespaceID -> Namespace
-bareNS nsId = Namespace{matchID = nsId, mnemonic = "", names = []}
+emptyNS :: NamespaceID -> Namespace
+emptyNS nsId = Namespace{matchID = nsId, mnemonic = "", names = []}
+
+bareNSID :: Int -> NamespaceID
+bareNSID 0x10 = CoreNS
+bareNSID marker = UnassociatedNS marker
+
+bareRef :: Int -> Word8 -> BULK
+bareRef marker name =
+    Reference $ Ref (bareNSID marker) $ bareName name
+
+pattern Core :: Word8 -> BULK
+pattern Core name <- (Reference (Ref CoreNS Name{index = name}))
+    where
+        Core name = bareRef 0x10 name
 
 runWarningsAndError :: Sem (Error String : Output Warning : r) a -> Sem r (Either String a)
 runWarningsAndError action = do

@@ -12,7 +12,7 @@ import Data.Map.Strict qualified as M
 import Data.Set qualified as S
 import Data.Text (Text)
 import Data.Word (Word8)
-import Witch (From (..), TryFrom (..), maybeTryFrom)
+import Witch (From (..))
 
 data BULK
     = Nil
@@ -23,11 +23,6 @@ data BULK
 
 data Ref = Ref {nsID :: NamespaceID, name :: Name} deriving (Eq, Ord, Show)
 
-pattern Core :: Word8 -> BULK
-pattern Core name <- (Reference (Ref CoreNS Name{marker = name}))
-    where
-        Core name = Reference $ Ref CoreNS $ from name
-
 data Namespace
     = Namespace
     { matchID :: NamespaceID
@@ -37,11 +32,14 @@ data Namespace
     deriving (Ord, Show)
 
 data Name = Name
-    { marker :: Word8
+    { index :: Word8
     , mnemonic :: Maybe Text
     , value :: Value
     }
     deriving (Eq, Ord, Show)
+
+bareName :: Word8 -> Name
+bareName index = Name index Nothing SelfEval
 
 data Value = SelfEval | Expression BULK | Digest CheckDigest | LazyFunction LazyFunction deriving (Eq, Ord, Show)
 
@@ -58,7 +56,6 @@ data Package = Package
 
 data NamespaceID
     = CoreNS
-    | TempNS
     | UnassociatedNS Int
     | MatchEq BULK
     | MatchNamePrefix Word8 ByteString
@@ -94,7 +91,7 @@ class WithKey k a | a -> k where
     getKey :: a -> k
 
 instance WithKey Word8 Name where
-    getKey = (.marker)
+    getKey = (.index)
 
 instance WithKey NamespaceID Namespace where
     getKey = (.matchID)
@@ -107,19 +104,6 @@ instance Eq Namespace where
 
 instance Semigroup Context where
     ctx1@Context{} <> ctx2@Context{} = Context{packages = S.union ctx1.packages ctx2.packages, namespaces = S.union ctx1.namespaces ctx2.namespaces}
-
-instance From Int NamespaceID where
-    from 0x10 = CoreNS
-    from ns = UnassociatedNS ns
-
-instance TryFrom NamespaceID Int where
-    tryFrom = maybeTryFrom \case
-        CoreNS -> Just 0x10
-        UnassociatedNS ns -> Just ns
-        _ -> Nothing
-
-instance From Word8 Name where
-    from num = Name num Nothing SelfEval
 
 instance From Context Scope where
     from ctx =

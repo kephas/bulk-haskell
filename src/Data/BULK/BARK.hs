@@ -18,7 +18,7 @@ import Prelude hiding (words)
 import Data.BULK (CheckDigest (..), Context, FromBULK (..), Name (..), Namespace (..), NamespaceID (..), Ref (..), Value (..), hex, list, nextBULK, string, withFormCase, (.:), (<*:>), (<:>))
 import Data.BULK.API (runAllIO)
 import Data.BULK.Debug (debug)
-import Data.BULK.ToFrom (decodeFile)
+import Data.BULK.From (decodeFile)
 import Data.BULK.Utils (IOE, readFileBS)
 
 newtype BARK = BARK [Entry]

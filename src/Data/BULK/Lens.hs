@@ -59,7 +59,7 @@ coreName :: BULK -> Text -> Value -> Name
 coreName ref mnemonic' value =
     Name{..}
   where
-    marker = (ref ^?! _Reference).name.marker
+    index = (ref ^?! _Reference).name.index
     mnemonic = Just mnemonic'
 
 knownNS :: NamespaceID -> Traversal' Scope Namespace
