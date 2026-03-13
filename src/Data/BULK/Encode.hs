@@ -11,9 +11,9 @@ where
 import Data.Binary (Put, putWord8)
 import Data.Binary.Put (putWord16be, putWord32be, putWord64be, runPut)
 import Data.Bits (Bits (..))
-import Data.ByteString.Builder as BB
+import Data.ByteString.Builder qualified as BB
 import Data.ByteString.Lazy qualified as BS
-import Data.Foldable (find, traverse_)
+import Data.Foldable (find, fold, traverse_)
 import Data.List.Extra (list)
 import Data.Maybe (fromMaybe)
 import Data.String.Interpolate (i)
@@ -24,7 +24,7 @@ import Witch (from, tryFrom)
 
 import Data.BULK.Debug (debug)
 import Data.BULK.Decode (toNat)
-import Data.BULK.Types (BULK (..), Name (..), Ref (..))
+import Data.BULK.Types (BULK (..), Name (..), NamespaceID (..), Ref (..))
 
 encode :: (Member (Error String) r) => [BULK] -> Sem r BS.ByteString
 encode = (BB.toLazyByteString <$>) . encodeSeq
@@ -37,20 +37,30 @@ encodeExpr Nil = pure $ BB.word8 0
 encodeExpr (Form exprs) = do
     content <- encodeSeq exprs
     pure $ BB.word8 1 <> content <> BB.word8 2
-encodeExpr (Array [num]) | num < 64 = pure $ BB.word8 $ 0x80 + num
-encodeExpr (Array bs) =
-    if len < 64
-        then pure $ BB.word8 (fromIntegral $ 0xC0 + len) <> BB.lazyByteString bs
-        else do
-            size <- encodeExpr (encodeNat len)
-            pure $ BB.word8 3 <> size <> BB.lazyByteString bs
+encodeExpr (Array bs)
+    | Just num <- smallInt bs =
+        pure $ BB.word8 $ 0x80 + num
+    | len < 64 =
+        pure $ BB.word8 (fromIntegral $ 0xC0 + len) <> BB.lazyByteString bs
+    | otherwise = do
+        size <- encodeExpr (encodeNat len)
+        pure $ BB.word8 3 <> size <> BB.lazyByteString bs
   where
     len = BS.length bs
-encodeExpr (IntReference ns name)
-    | ns < 0x7F = pure $ int ns <> BB.word8 name
-    | otherwise = pure $ foldMap int $ cutInWords ns ++ [fromIntegral name]
-encodeExpr (Reference ref) =
-    throw [i|not an encodable reference: #{debug ref}|]
+encodeExpr ref@(Reference (Ref ns name))
+    | Just num <- numNS ns =
+        pure $ encodeNS num <> BB.word8 name.marker
+    | otherwise =
+        throw [i|not an encodable reference: #{debug ref}|]
+
+smallInt :: BS.LazyByteString -> Maybe Word8
+smallInt [num] = if num < 64 then Just num else Nothing
+smallInt _words = Nothing
+
+numNS :: NamespaceID -> Maybe Int
+numNS CoreNS = Just 0x10
+numNS (UnassociatedNS num) = Just num
+numNS _ns = Nothing
 
 pattern IntReference :: Int -> Word8 -> BULK
 pattern IntReference ns num <- (toIntRef -> Just (ns, num))
@@ -102,15 +112,11 @@ unsafePutWord64s =
     go 0 = []
     go n = (n .&. 0xFFFF_FFFF_FFFF_FFFF) : go (shiftR n 64)
 
-cutInWords :: Int -> [Int]
-cutInWords =
-    cut 0x7F
+encodeNS :: Int -> BB.Builder
+encodeNS = fold . cut 0x7F
   where
     cut remove remain =
-        case (remain, remain >= remove) of
-            (0, _) -> [0]
-            (final, False) -> [final]
-            (_, True) -> remove : cut 0xFF (remain - remove)
-
-int :: Int -> BB.Builder
-int = BB.word8 . fromIntegral
+        case (remain, remain < remove) of
+            (final, True) -> [int8 final]
+            (_, False) -> int8 remove : cut 0xFF (remain - remove)
+    int8 = BB.word8 . fromIntegral
