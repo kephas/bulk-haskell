@@ -17,6 +17,7 @@ import Data.Word (Word8)
 import Polysemy (Sem, run)
 import Polysemy.Error (Error)
 import System.Random (Random)
+import Test.HUnit (assertFailure)
 import Test.Hspec
 import Test.QuickCheck (Gen, Property, arbitrary, choose, forAll, listOf, resize)
 import Test.QuickCheck.Instances.ByteString ()
@@ -79,6 +80,10 @@ shouldReturnRight :: (HasCallStack, Debug e, Show a, Eq a) => IO (Either e a) ->
 shouldReturnRight action expected = do
     actual <- action
     actual `shouldBeRight` expected
+
+expectRight :: (HasCallStack, Debug e, Show a, Eq a) => Either e a -> IO a
+expectRight (Right value) = pure value
+expectRight (Left err) = assertFailure $ debug err
 
 unDigits :: [Word8] -> Integer
 unDigits = D.unDigits 256 . map fromIntegral

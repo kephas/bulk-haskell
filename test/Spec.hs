@@ -198,6 +198,12 @@ spec = describe "BULK" $ do
                 matchTo @ByteString [("", Array ""), ("\0\1\2", Array "\0\1\2")]
             it "encodes UTF-8 strings" $ do
                 matchTo @Text [("foo", Array "foo"), ("γράφω", Array [hex|CEB3CF81CEACCF86CF89|])]
+            it "encodes with imports" $ do
+                Right ctx <- loadNotationFiles ctx0 ["test/bulk/config/foo.bulktext", "test/bulk/config/bar.bulktext", "test/bulk/config/foobar.bulktext"]
+                let value = Foo False True 42
+                bulk <- expectRight $ toBULK ctx value
+                binary <- expectRight $ encodeStream [bulk]
+                decode ctx binary `shouldBeRight` [value]
 
         --
         -- BARK
@@ -314,6 +320,14 @@ instance FromBULK Foo where
     parseBULK = foo <*:> "foo" $ do
         Foo <$> nextBULK <*> nextBULK <*> nextBULK
 
+instance ToBULK Foo where
+    encodeBULK (Foo b1 b2 num) = do
+        fooOp <- namedRef "foo" "foo"
+        b1B <- encodeBULK b1
+        b2B <- encodeBULK b2
+        numB <- encodeBULK num
+        pure $ Form [fooOp, b1B, b2B, numB]
+
 data Bar = Bar Int Foo deriving (Eq, Show)
 
 instance FromBULK Bar where
@@ -321,4 +335,4 @@ instance FromBULK Bar where
         Bar <$> (bar <:> "int") nextBULK <*> (bar <:> "foo") nextBULK
 
 matchTo :: (HasCallStack, ToBULK a) => [(a, BULK)] -> IO ()
-matchTo = traverse_ (uncurry $ shouldBeRight . toBULK)
+matchTo = traverse_ (uncurry $ shouldBeRight . toBULK mempty)

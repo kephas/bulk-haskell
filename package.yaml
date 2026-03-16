@@ -89,6 +89,7 @@ tests:
     dependencies:
     - bulk
     - digits
+    - HUnit
     - hspec
     - quickcheck-instances
     - QuickCheck

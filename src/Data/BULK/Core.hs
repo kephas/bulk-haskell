@@ -17,9 +17,9 @@ import Polysemy.Error (runError)
 import Prelude hiding (False, True)
 
 import Data.BULK.Decode (parseLazy, toNat)
-import Data.BULK.Encode (boundedPutter, encodeNat, unsafeEncodeBounded)
-import Data.BULK.Types (BULK (..))
-import Data.BULK.Utils (pattern Core)
+import Data.BULK.Encode (boundedPutter, encodeNat, unsafeEncodeBounded, pattern Nat)
+import Data.BULK.Types (BULK (..), NamespaceID (..))
+import Data.BULK.Utils (bareRef, pattern Core)
 
 pattern Version, Namespace, Package, Import, Define, Mnemonic, True, False, UnsignedInt, SignedInt, Trace :: BULK
 pattern Version = Core 0x00
@@ -37,6 +37,21 @@ pattern Trace = Core 0xD0
 version :: Int -> Int -> BULK
 version major minor =
     Form [Version, encodeNat major, encodeNat minor]
+
+importNS :: NamespaceID -> Int -> Maybe BULK
+importNS ns marker = do
+    identifier <- nsIdForm marker ns
+    Just $ Form [Import, Nat marker, Form [Namespace, identifier]]
+
+nsIdForm :: Int -> NamespaceID -> Maybe BULK
+nsIdForm _marker CoreNS = Nothing
+nsIdForm _marker1 (UnassociatedNS _marker2) = Nothing
+nsIdForm _marker (MatchEq identifier) =
+    Just identifier
+nsIdForm marker (MatchNamePrefix index digest) =
+    Just $ Form [bareRef marker index, Array digest]
+nsIdForm _marker (MatchQualifiedNamePrefix ref digest) =
+    Just $ Form [Reference ref, Array digest]
 
 define :: BULK -> BULK -> BULK
 define ref value =

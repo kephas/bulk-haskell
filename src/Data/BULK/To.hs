@@ -4,6 +4,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MonoLocalBinds #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -23,11 +24,13 @@ import Polysemy.Error (Error, runError, throw)
 import Polysemy.Output (Output)
 import Polysemy.Reader (Reader, ask, runReader)
 
-import Data.BULK.Core (encodeInt)
+import Data.BULK.Core (encodeInt, importNS, version)
 import Data.BULK.Core qualified as Core
-import Data.BULK.Encode (encodeNat)
-import Data.BULK.Types (BULK (..), Context (..), Name (..), Namespace (..), Ref (..), Warning)
+import Data.BULK.Encode (encode, encodeNat)
+import Data.BULK.Types (BULK (..), Context (..), Name (..), Namespace (..), NamespaceID (..), Ref (..), Warning)
 import Data.BULK.Utils (liftMaybe)
+import Data.Map.Strict qualified as M
+import Data.Maybe (mapMaybe)
 
 class ToBULK a where
     encodeBULK :: a -> Encoder BULK
@@ -41,8 +44,39 @@ toBULKWith :: (Members [Error String, Output Warning] r, ToBULK a) => Context ->
 toBULKWith ctx value =
     runReader ctx $ toBULK value
 
-askName :: (Members [Error String, Reader Context] r) => Text -> Text -> Sem r BULK
-askName nsMnemonic nameMnemonic = do
+{- | Encode a binary BULK stream
+   | Create necessary imports and use them to encode BULK expressions
+-}
+encodeStream :: (Member (Error String) r) => [BULK] -> Sem r ByteString
+encodeStream exprs = do
+    let nsMarkers = M.fromList $ (`zip` [0x14 ..]) $ S.toAscList $ collectNSS $ Form exprs
+        imports = map (unassociateNSS nsMarkers) $ mapMaybe (uncurry importNS) $ M.toAscList nsMarkers
+        unassociated = map (unassociateNSS nsMarkers) exprs
+    encode $ [version 1 0] <> imports <> unassociated
+
+collectNSS :: BULK -> S.Set NamespaceID
+collectNSS Nil = S.empty
+collectNSS (Array _bs) = S.empty
+collectNSS (Form exprs) = S.unions $ map collectNSS exprs
+collectNSS (Reference (Ref ns _name)) = collectNS ns
+
+collectNS :: NamespaceID -> S.Set NamespaceID
+collectNS CoreNS = S.empty
+collectNS (UnassociatedNS _) = S.empty
+collectNS ns@(MatchEq _) = S.singleton ns
+collectNS ns@(MatchNamePrefix _index _digest) = S.singleton ns
+collectNS ns1@(MatchQualifiedNamePrefix (Ref ns2 _name) _digest) = S.fromList [ns1, ns2]
+
+unassociateNSS :: M.Map NamespaceID Int -> BULK -> BULK
+unassociateNSS _imports Nil = Nil
+unassociateNSS _imports array@(Array _) = array
+unassociateNSS imports (Form exprs) = Form $ map (unassociateNSS imports) exprs
+unassociateNSS imports ref@(Reference (Ref ns name))
+    | Just marker <- M.lookup ns imports = Reference $ Ref (UnassociatedNS marker) name
+    | otherwise = ref
+
+namedRef :: (Members [Error String, Reader Context] r) => Text -> Text -> Sem r BULK
+namedRef nsMnemonic nameMnemonic = do
     ctx <- ask
     ns <- liftMaybe [i|no namespace #{nsMnemonic}|] $ S.lookupMin $ S.filter ((== nsMnemonic) . (.mnemonic)) $ ctx.namespaces
     name <- liftMaybe [i|no name #{ns}:#{nameMnemonic}|] $ find ((== (Just nameMnemonic)) . (.mnemonic)) ns.names

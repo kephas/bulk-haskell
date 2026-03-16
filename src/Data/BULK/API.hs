@@ -2,7 +2,6 @@ module Data.BULK.API where
 
 import Data.BULK.Decode qualified as D
 import Data.BULK.Encode qualified as E
-import Data.BULK.Eval (mkContext)
 import Data.BULK.From qualified as From
 import Data.BULK.TextNotation qualified as TN
 import Data.BULK.To qualified as To
@@ -49,9 +48,6 @@ parseNotationFileBin = runAllIO . TN.parseNotationFileBin
 fromBULK :: (From.FromBULK a) => BULK -> Either String a
 fromBULK = runAll . From.fromBULK
 
-toBULK :: (To.ToBULK a) => a -> Either String BULK
-toBULK = runAll . To.toBULKWith (mkContext [])
-
 decode :: (From.FromBULK a) => Context -> LazyByteString -> Either String a
 decode ctx = runAll . From.decode ctx
 
@@ -69,6 +65,14 @@ decodeNotationFile ctx = runAllIO . From.decodeNotationFile ctx
 
 loadNotationFiles :: Context -> [FilePath] -> IO (Either String Context)
 loadNotationFiles ctx = runAllIO . From.loadNotationFiles ctx
+
+-- To
+
+toBULK :: (To.ToBULK a) => Context -> a -> Either String BULK
+toBULK ctx = runAll . To.toBULKWith ctx
+
+encodeStream :: [BULK] -> Either String LazyByteString
+encodeStream = runAll . To.encodeStream
 
 -- interpreters
 
