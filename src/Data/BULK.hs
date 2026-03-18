@@ -4,7 +4,7 @@ module Data.BULK (
     module Reexport,
 ) where
 
-import Data.BULK.API as Reexport (decode, decodeFile, decodeNotation, decodeNotationFile, encode, encodeStream, fromBULK, loadNotationFiles, parseNotation, parseNotationFile, parseNotationFileBin, parseStream, parseStreamV1, readFile, readFileV1, toBULK)
+import Data.BULK.API as Reexport (decode, decodeFile, decodeNotation, decodeNotationFile, encode, fromBULK, loadNotationFiles, parseNotation, parseNotationFile, parseNotationFileBin, parseStream, parseStreamV1, readFile, readFileV1)
 import Data.BULK.Core as Reexport (define, encodeInt, toIntegral, version)
 import Data.BULK.Decode as Reexport (VersionConstraint (..), getExpression, getStream, parseLazy, toNat)
 import Data.BULK.Encode as Reexport (encodeNat, pattern Nat)

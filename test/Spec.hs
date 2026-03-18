@@ -21,9 +21,11 @@ import Witch (from)
 import Prelude hiding (readFile)
 
 import Data.BULK
+import Data.BULK.API (encodeSeq)
 import Data.BULK.BARK qualified as BARK
 import Data.BULK.Core qualified as Core
 import Data.BULK.Eval (mkContext)
+import Data.BULK.To (toBULKWith)
 import Test.BULK
 import Test.QuickCheck.Instances.BULK (simpleBULK)
 
@@ -84,11 +86,11 @@ spec = describe "BULK" $ do
         -- Encoding
         describe "encoding" $ do
             it "encodes primitives" $ do
-                encode [Nil, Form [], Array "", bareRef 0x10 0] `shouldBeRight` [hex|000102C01000|]
+                encodeSeq [Nil, Form [], Array "", bareRef 0x10 0] `shouldBeRight` [hex|000102C01000|]
             it "encodes natural numbers" $ do
                 map @Int encodeNat [0, 1, 0xFF, 0x100, 0xFFFF, 0x1_0000] `shouldBe` [Array "\0", Array "\1", Array "\xFF", Array "\1\0", Array "\xFF\xFF", Array "\0\1\0\0"]
                 map @Integer encodeNat [0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF] `shouldBe` [Array [hex|00000000FFFFFFFFFFFFFFFFFFFFFFFF|]]
-                encode [Array "\0", Array "\1", Array "\xFF", Array "\1\0"] `shouldBeRight` [hex|8081C1FFC20100|]
+                encodeSeq [Array "\0", Array "\1", Array "\xFF", Array "\1\0"] `shouldBeRight` [hex|8081C1FFC20100|]
             prop "round-trips arbitrary primitives" $ \expr ->
                 shouldParseToItself expr
         --
@@ -203,10 +205,7 @@ spec = describe "BULK" $ do
                 matchTo @Text [("foo", Array "foo"), ("γράφω", Array [hex|CEB3CF81CEACCF86CF89|])]
             it "encodes with imports" $ do
                 Right ctx <- loadNotationFiles ctx0 ["test/bulk/config/foo.bulktext", "test/bulk/config/bar.bulktext", "test/bulk/config/foobar.bulktext"]
-                let value = Foo False True 42
-                bulk <- expectRight $ toBULK ctx value
-                binary <- expectRight $ encodeStream [bulk]
-                decode ctx binary `shouldBeRight` [value]
+                shouldRoundTrip ctx [Foo False True 42]
 
         --
         -- BARK
@@ -336,11 +335,11 @@ instance FromBULK Foo where
         Foo <$> nextBULK <*> nextBULK <*> nextBULK
 
 instance ToBULK Foo where
-    encodeBULK (Foo b1 b2 num) = do
+    toBULK (Foo b1 b2 num) = do
         fooOp <- namedRef "foo" "foo"
-        b1B <- encodeBULK b1
-        b2B <- encodeBULK b2
-        numB <- encodeBULK num
+        b1B <- toBULK b1
+        b2B <- toBULK b2
+        numB <- toBULK num
         pure $ Form [fooOp, b1B, b2B, numB]
 
 data Bar = Bar Int Foo deriving (Eq, Show)
@@ -350,7 +349,7 @@ instance FromBULK Bar where
         Bar <$> (bar <:> "int") nextBULK <*> (bar <:> "foo") nextBULK
 
 matchTo :: (HasCallStack, ToBULK a) => [(a, BULK)] -> IO ()
-matchTo = traverse_ (uncurry $ shouldBeRight . toBULK mempty)
+matchTo = traverse_ (uncurry $ shouldBeRight . runAll . toBULKWith mempty)
 
 withTempFile :: FilePath -> String -> (FilePath -> IO a) -> IO a
 withTempFile dir template =
@@ -360,3 +359,8 @@ withTempFile dir template =
         (path, handle) <- openTempFile dir template
         hClose handle
         return path
+
+shouldRoundTrip :: (Eq a, Show a, ToBULK a, FromBULK a) => Context -> [a] -> Expectation
+shouldRoundTrip ctx values = do
+    binary <- expectRight $ encode ctx values
+    decode ctx binary `shouldBeRight` values

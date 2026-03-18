@@ -12,6 +12,7 @@ import Data.Text (Text)
 import Polysemy (Embed, Sem, run, runM)
 import Polysemy.Error (Error)
 import Polysemy.Output (Output)
+import Polysemy.Reader (runReader)
 
 -- Decode
 
@@ -29,8 +30,8 @@ parseStreamV1 = runAll . D.parseStreamV1
 
 -- Encode
 
-encode :: [BULK] -> Either String LazyByteString
-encode = runAll . E.encode
+encodeSeq :: [BULK] -> Either String LazyByteString
+encodeSeq = runAll . E.encodeSeq
 
 -- TextNotation
 
@@ -68,10 +69,10 @@ loadNotationFiles ctx = runAllIO . From.loadNotationFiles ctx
 
 -- To
 
-toBULK :: (To.ToBULK a) => Context -> a -> Either String BULK
-toBULK ctx = runAll . To.toBULKWith ctx
+encode :: (To.ToBULK a) => Context -> a -> Either String LazyByteString
+encode ctx = runAll . runReader ctx . To.encode
 
-encodeStream :: [BULK] -> Either String LazyByteString
+encodeStream :: BULK -> Either String LazyByteString
 encodeStream = runAll . To.encodeStream
 
 -- interpreters

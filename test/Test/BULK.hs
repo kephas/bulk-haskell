@@ -23,7 +23,8 @@ import Test.QuickCheck (Gen, Property, arbitrary, choose, forAll, listOf, resize
 import Test.QuickCheck.Instances.ByteString ()
 import Prelude hiding (words)
 
-import Data.BULK (BULK (Array, Form), bareRef, encode, encodeNat, getExpression, parseLazy, parseNotation, parseStreamV1, toIntegral, _Int, _Nat, pattern Nat)
+import Data.BULK (BULK (Array, Form), bareRef, encodeNat, getExpression, parseLazy, parseNotation, parseStreamV1, toIntegral, _Int, _Nat, pattern Nat)
+import Data.BULK.API (encodeSeq)
 import Data.BULK.Debug (Debug (..))
 import Data.BULK.Types (Warning)
 import Data.BULK.Utils (runWarningsAndError)
@@ -41,7 +42,7 @@ test_bigger_arrays_decoding size =
         shouldParseToItself array
 
 shouldParseToItself :: BULK -> Expectation
-shouldParseToItself expr = (encode [expr] >>= parseExpr) `shouldBeRight` expr
+shouldParseToItself expr = (encodeSeq [expr] >>= parseExpr) `shouldBeRight` expr
 
 parseInts :: (HasCallStack, Integral a, Show a) => [(BULK, ByteString, a)] -> IO ()
 parseInts = traverse_ \(kind, bytes, value) ->

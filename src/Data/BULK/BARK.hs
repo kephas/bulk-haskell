@@ -12,17 +12,18 @@ import Data.ByteString as BS (StrictByteString)
 import Data.List (uncons)
 import Data.Maybe (fromJust)
 import Data.String.Interpolate (i)
+import Data.Text qualified as T
+import Polysemy.Reader (runReader)
 import System.FilePath (takeDirectory, (</>))
 import Prelude hiding (words)
 
-import Data.BULK (CheckDigest (..), Context, FromBULK (..), Name (..), Namespace (..), NamespaceID (..), Ref (..), ToBULK (encodeBULK), Value (..), hex, list, namedRef, nextBULK, string, withFormCase, (.:), (<*:>), (<:>))
+import Data.BULK (CheckDigest (..), Context, FromBULK (..), Name (..), Namespace (..), NamespaceID (..), Ref (..), ToBULK (toBULK), Value (..), hex, list, namedRef, nextBULK, string, withFormCase, (.:), (<*:>), (<:>))
 import Data.BULK.API (runAllIO)
 import Data.BULK.Debug (Debug, debug)
 import Data.BULK.From (decodeFile)
-import Data.BULK.To (encodeStream, toBULK)
+import Data.BULK.To (encodeFile)
 import Data.BULK.Types (BULK (..))
-import Data.BULK.Utils (IOE, bulkToList, readFileBS, writeFileLBS)
-import Polysemy.Reader (runReader)
+import Data.BULK.Utils (IOE, readFileBS)
 
 newtype BARK = BARK [Entry]
     deriving (Eq, Show)
@@ -64,9 +65,7 @@ verifyManifestEntry root entry = do
 createManifest :: Context -> FilePath -> [FilePath] -> IO (Either String ())
 createManifest ctx manifestPath files = runAllIO $ runReader ctx do
     manifest <- BARK <$> traverse makeManifestEntry files
-    bulk <- toBULK manifest
-    binary <- encodeStream $ bulkToList bulk
-    writeFileLBS manifestPath binary
+    encodeFile manifestPath manifest
 
 makeManifestEntry :: FilePath -> IOE r Entry
 makeManifestEntry path = do
@@ -111,26 +110,26 @@ instance FromBULK Hash where
             ]
 
 instance ToBULK BARK where
-    encodeBULK (BARK entries) = do
+    toBULK (BARK entries) = do
         barkOp <- namedRef "bark" "bark"
-        Form . (barkOp :) <$> traverse encodeBULK entries
+        Form . (barkOp :) <$> traverse toBULK entries
 
 instance ToBULK Entry where
-    encodeBULK Description{..} = do
+    toBULK Description{..} = do
         descOp <- namedRef "bark" "description"
         metadataOp <- namedRef "bark" "metadata"
         aboutOp <- namedRef "bark" "about"
-        pathExpr <- form2 <$> namedRef "bark" "path" <*> encodeBULK path
-        hashExpr <- form2 <$> namedRef "bark" "hash" <*> encodeBULK hash
+        pathExpr <- form2 <$> namedRef "bark" "path" <*> toBULK (T.pack path)
+        hashExpr <- form2 <$> namedRef "bark" "hash" <*> toBULK hash
         pure $ Form [descOp, Form [metadataOp, Form [aboutOp, pathExpr], hashExpr]]
 
 instance ToBULK Hash where
-    encodeBULK Hash{..} =
-        form2 <$> encodeBULK alg <*> encodeBULK digest
+    toBULK Hash{..} =
+        form2 <$> toBULK alg <*> toBULK digest
 
 instance ToBULK HashAlg where
-    encodeBULK Shake128 = namedRef "bark" "shake128"
-    encodeBULK MD5 = namedRef "bark" "md5"
+    toBULK Shake128 = namedRef "bark" "shake128"
+    toBULK MD5 = namedRef "bark" "md5"
 
 form2 :: BULK -> BULK -> BULK
 form2 operator operand = Form [operator, operand]

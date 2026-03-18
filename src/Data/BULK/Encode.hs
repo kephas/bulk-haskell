@@ -5,7 +5,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ViewPatterns #-}
 
-module Data.BULK.Encode (encode, encodeNat, pattern Nat, encodeExpr, unsafeEncodeBounded, boundedPutter)
+module Data.BULK.Encode (encodeSeq, encodeNat, pattern Nat, encodeExpr, unsafeEncodeBounded, boundedPutter)
 where
 
 import Data.Binary (Put, putWord8)
@@ -25,16 +25,16 @@ import Data.BULK.Debug (debug)
 import Data.BULK.Decode (toNat)
 import Data.BULK.Types (BULK (..), Name (..), NamespaceID (..), Ref (..))
 
-encode :: (Member (Error String) r) => [BULK] -> Sem r BS.ByteString
-encode = (BB.toLazyByteString <$>) . encodeSeq
+encodeSeq :: (Member (Error String) r) => [BULK] -> Sem r BS.ByteString
+encodeSeq = (BB.toLazyByteString <$>) . encodeExprs
 
-encodeSeq :: (Member (Error String) r) => [BULK] -> Sem r BB.Builder
-encodeSeq = (mconcat <$>) . traverse encodeExpr
+encodeExprs :: (Member (Error String) r) => [BULK] -> Sem r BB.Builder
+encodeExprs = (mconcat <$>) . traverse encodeExpr
 
 encodeExpr :: (Member (Error String) r) => BULK -> Sem r BB.Builder
 encodeExpr Nil = pure $ BB.word8 0
 encodeExpr (Form exprs) = do
-    content <- encodeSeq exprs
+    content <- encodeExprs exprs
     pure $ BB.word8 1 <> content <> BB.word8 2
 encodeExpr (Array bs)
     | Just num <- smallInt bs =

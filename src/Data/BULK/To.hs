@@ -12,49 +12,62 @@
 
 module Data.BULK.To where
 
+import Data.ByteString (StrictByteString)
 import Data.ByteString.Lazy (ByteString)
 import Data.ByteString.Lazy qualified as B
 import Data.List (find)
+import Data.Map.Strict qualified as M
+import Data.Maybe (mapMaybe)
 import Data.Set qualified as S
 import Data.String.Interpolate (i)
 import Data.Text (Text)
-import Data.Text qualified as T
 import Data.Text.Encoding (encodeUtf8)
-import Polysemy (Member, Members, Sem, run)
+import Polysemy (Embed, Member, Members, Sem, run)
 import Polysemy.Error (Error, runError, throw)
 import Polysemy.Output (Output)
 import Polysemy.Reader (Reader, ask, runReader)
 
 import Data.BULK.Core (encodeInt, importNS, version)
 import Data.BULK.Core qualified as Core
-import Data.BULK.Encode (encode, encodeNat)
+import Data.BULK.Encode (encodeNat, encodeSeq)
+import Data.BULK.Eval ()
 import Data.BULK.Types (BULK (..), Context (..), Name (..), Namespace (..), NamespaceID (..), Ref (..), Warning)
-import Data.BULK.Utils (liftMaybe)
-import Data.ByteString (StrictByteString)
-import Data.Map.Strict qualified as M
-import Data.Maybe (mapMaybe)
+import Data.BULK.Utils (bulkToList, liftMaybe, writeFileLBS)
 
 class ToBULK a where
-    encodeBULK :: a -> Encoder BULK
-
-toBULK :: (Members [Error String, Output Warning, Reader Context] r, ToBULK a) => a -> Sem r BULK
-toBULK value = do
-    ctx <- ask
-    runEncoder ctx $ encodeBULK value
+    toBULK :: a -> Encoder BULK
 
 toBULKWith :: (Members [Error String, Output Warning] r, ToBULK a) => Context -> a -> Sem r BULK
 toBULKWith ctx value =
-    runReader ctx $ toBULK value
+    runEncoder ctx $ toBULK value
 
-{- | Encode a binary BULK stream
+{- | Encode a value as a binary BULK stream
    | Create necessary imports and use them to encode BULK expressions
 -}
-encodeStream :: (Member (Error String) r) => [BULK] -> Sem r ByteString
-encodeStream exprs = do
+encode :: (Members [Error String, Output Warning, Reader Context] r, ToBULK a) => a -> Sem r ByteString
+encode value = do
+    ctx <- ask
+    runEncoder ctx $ toBULK value >>= encodeStream
+
+encodeFile :: (Members [Error String, Output Warning, Reader Context, Embed IO] r, ToBULK a) => FilePath -> a -> Sem r ()
+encodeFile path value =
+    encode value >>= writeFileLBS path
+
+{- | Encode a BULK expression as a binary BULK stream
+   | Create necessary imports and use them to encode BULK expressions
+-}
+encodeStream :: (Member (Error String) r) => BULK -> Sem r ByteString
+encodeStream = encodeStreamSeq . bulkToList
+
+{- | Encode a sequence of BULK expressions as a binary BULK stream
+   | Create necessary imports and use them to encode BULK expressions
+-}
+encodeStreamSeq :: (Member (Error String) r) => [BULK] -> Sem r ByteString
+encodeStreamSeq exprs = do
     let nsMarkers = M.fromList $ (`zip` [0x14 ..]) $ S.toAscList $ collectNSS $ Form exprs
         imports = map (unassociateNSS nsMarkers) $ mapMaybe (uncurry importNS) $ M.toAscList nsMarkers
         unassociated = map (unassociateNSS nsMarkers) exprs
-    encode $ [version 1 0] <> imports <> unassociated
+    encodeSeq $ [version 1 0] <> imports <> unassociated
 
 collectNSS :: BULK -> S.Set NamespaceID
 collectNSS Nil = S.empty
@@ -84,29 +97,29 @@ namedRef nsMnemonic nameMnemonic = do
     name <- liftMaybe [i|no name #{ns}:#{nameMnemonic}|] $ find ((== (Just nameMnemonic)) . (.mnemonic)) ns.names
     pure $ Reference $ Ref ns.matchID name
 
+instance ToBULK BULK where
+    toBULK = pure
+
 instance ToBULK Bool where
-    encodeBULK True = pure Core.True
-    encodeBULK False = pure Core.False
+    toBULK True = pure Core.True
+    toBULK False = pure Core.False
 
 instance ToBULK Int where
-    encodeBULK num
+    toBULK num
         | num >= 0 = pure $ encodeNat num
         | otherwise = pure $ encodeInt num
 
 instance (ToBULK a) => ToBULK [a] where
-    encodeBULK xs = Form <$> traverse encodeBULK xs
+    toBULK xs = Form <$> traverse toBULK xs
 
 instance ToBULK Text where
-    encodeBULK = encodeBULK . B.fromStrict . encodeUtf8
-
-instance {-# OVERLAPPING #-} ToBULK [Char] where
-    encodeBULK = encodeBULK . T.pack
+    toBULK = toBULK . B.fromStrict . encodeUtf8
 
 instance ToBULK ByteString where
-    encodeBULK = pure . Array
+    toBULK = pure . Array
 
 instance ToBULK StrictByteString where
-    encodeBULK = encodeBULK . B.fromStrict
+    toBULK = toBULK . B.fromStrict
 
 type Encoder a = Sem '[Reader Context, Error String] a
 
