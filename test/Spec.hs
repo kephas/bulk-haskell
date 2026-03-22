@@ -133,7 +133,7 @@ spec = describe "BULK" $ do
                 "foo:bar quux:one foo:baz" `shouldDenote` (uncurry bareRef <$> [(0x14, 0), (0x15, 0), (0x14, 1)])
                 "123:one" `shouldDenote` [bareRef 0x14 0]
             it "uses known mnemonics" $ do
-                Right ctx <- loadNotationFiles ctx0 ["test/bulk/123.bulktext"]
+                ctx <- expectReturnRight $ loadNotationFiles ctx0 ["test/bulk/123.bulktext"]
                 decodeNotationFile @[Int] ctx "test/bulk/321.bulktext" `shouldReturnRight` [1]
             it "parses nested BULK" $ do
                 "([ nil ])" `shouldDenote` [Array "\0"]
@@ -169,19 +169,19 @@ spec = describe "BULK" $ do
                 decodeNotationFile @[()] ctx0 "test/bulk/bootstrap-bad.bulktext" `shouldReturn` Left "test/bulk/bootstrap-bad.bulktext: unable to bootstrap namespace: bootstrap"
                 decodeNotationFile @[()] ctx0 "config/hash0.bulktext" `shouldReturnRight` []
             it "can bootstrap packages" $ do
-                Right ctx <- loadNotationFiles ctx0 ["test/bulk/config/foo.bulktext", "test/bulk/config/bar.bulktext", "test/bulk/config/foobar.bulktext"]
+                ctx <- expectReturnRight $ loadNotationFiles ctx0 ["test/bulk/config/foo.bulktext", "test/bulk/config/bar.bulktext", "test/bulk/config/foobar.bulktext"]
                 decodeNotation ctx "( version 1 0 ) ( import 20 ( package ( 0x16-00 #[4] 0xB4475636 ) ) 3 ) ( bar:bar ( bar:int 2 ) ( bar:foo ( foo:foo true true 99 ) ) )" `shouldBeRight` [Bar 2 (Foo True True 99)]
             it "has verifiable packages" $ do
                 decodeNotationFile @[()] ctx0 "test/bulk/package-bad.bulktext" `shouldReturn` Left "test/bulk/package-bad.bulktext: verification failed for package (expected digest 0000000000000000000000000000000000000000000000000000000000000000 but got 7a6dcf4b2cf07e63b60b893c6ac193b55ce38857e18148afc5b113189324747c)"
             it "warns of missing packages" $ do
-                Right ctx <- loadNotationFiles ctx0 ["test/bulk/config/foo.bulktext", "test/bulk/config/bar.bulktext", "test/bulk/config/foobar.bulktext"]
+                ctx <- expectReturnRight $ loadNotationFiles ctx0 ["test/bulk/config/foo.bulktext", "test/bulk/config/bar.bulktext", "test/bulk/config/foobar.bulktext"]
                 decodeNotation @[Bar] ctx "( version 1 0 ) ( import 20 ( namespace ( hash0:shake128 #[4] 0x9DBFD602 ) ) ) ( import 21 ( package ( hash0:shake128 w6[0] ) ) 2 ) ( bar:bar ( bar:int 1 ) ( bar:foo ( foo:foo false true 42 ) ) )" `shouldBe` Left [i|not the expected operator: ({21}:0) (expected (bar:bar))\nunknown package: 00\n|]
 
         --
         -- Parser monad
         describe "Parser monad" $ do
             it "parses Haskell values" $ do
-                Right ctx <- loadNotationFiles ctx0 ["test/bulk/config/foo.bulktext", "test/bulk/config/bar.bulktext", "test/bulk/config/foobar.bulktext"]
+                ctx <- expectReturnRight $ loadNotationFiles ctx0 ["test/bulk/config/foo.bulktext", "test/bulk/config/bar.bulktext", "test/bulk/config/foobar.bulktext"]
                 decodeNotation ctx "( version 1 0 ) ( import 20 ( namespace ( hash0:shake128 #[4] 0x9DBFD602 ) ) ) ( import 21 ( namespace ( hash0:shake128 #[4] 0x37B6D258 ) ) ) ( foo:foo false true 42 )" `shouldBeRight` [Foo False True 42]
                 decodeNotation ctx "( version 1 0 ) ( import 20 ( package ( 0x1800 #[4] 0xB4475636 ) ) 3 2 ) ( 0x1400 ( 0x1401 1 ) ( 0x1402 ( 0x1600 false true 42 ) ) )" `shouldBeRight` [Bar 1 $ Foo False True 42]
                 decodeNotation @[Foo] ctx "( import 20 ( namespace ( hash0:shake128 #[4] 0x9DBFD602 ) ) ) ( import 21 ( namespace ( hash0:shake128 #[4] 0x37B6D258 ) ) ) ( foo:foo false true 42 )" `shouldBe` Left "missing version"
@@ -204,24 +204,24 @@ spec = describe "BULK" $ do
             it "encodes UTF-8 strings" $ do
                 matchTo @Text [("foo", Array "foo"), ("γράφω", Array [hex|CEB3CF81CEACCF86CF89|])]
             it "encodes with imports" $ do
-                Right ctx <- loadNotationFiles ctx0 ["test/bulk/config/foo.bulktext", "test/bulk/config/bar.bulktext", "test/bulk/config/foobar.bulktext"]
+                ctx <- expectReturnRight $ loadNotationFiles ctx0 ["test/bulk/config/foo.bulktext", "test/bulk/config/bar.bulktext", "test/bulk/config/foobar.bulktext"]
                 shouldRoundTrip ctx [Foo False True 42]
 
         --
         -- BARK
         describe "BARK" $ do
             it "reads a manifest" $ do
-                Right ctx <- loadNotationFiles ctx0 ["test/bulk/config/bark-alpha.bulktext"]
+                ctx <- expectReturnRight $ loadNotationFiles ctx0 ["test/bulk/config/bark-alpha.bulktext"]
                 decodeFile ctx "test/bulk/manifest-bad.bulk"
                     `shouldReturnRight` BARK.BARK
                         [ BARK.Description "nesting.bulk" $ BARK.Hash BARK.Shake128 [hex|A9624CB8FD374AE1D2D1537DC94B766A29AA38CD3AB958AF9BF80E05BB291818|]
                         , BARK.Description "primitives.bulk" $ BARK.Hash BARK.Shake128 [hex|A1ABD6CF9F45CFB7967570CC796CC085872257891DE1DC3D2FB277555E156CC0|]
                         , BARK.Description "missing version.bulk" $ BARK.Hash BARK.MD5 [hex|93B885ADFE0DA089CDF634904FD59F71|]
                         ]
-                BARK.verifyManifest ctx "test/bulk/manifest-bad.bulktext" `shouldReturn` Right [BARK.OK "nesting.bulk", BARK.Failed "primitives.bulk" "expected digest A1ABD6CF9F45CFB7967570CC796CC085872257891DE1DC3D2FB277555E156CC0 but got A1ABD6CF9F45CFB7967570CC796CC085872257891DE1DC3D2FB277555E156CCB", BARK.OK "missing version.bulk"]
-                BARK.verifyManifest ctx "test/bulk/manifest-bad.bulk" `shouldReturn` Right [BARK.OK "nesting.bulk", BARK.Failed "primitives.bulk" "expected digest A1ABD6CF9F45CFB7967570CC796CC085872257891DE1DC3D2FB277555E156CC0 but got A1ABD6CF9F45CFB7967570CC796CC085872257891DE1DC3D2FB277555E156CCB", BARK.OK "missing version.bulk"]
+                BARK.verifyManifest ctx "test/bulk/manifest-bad.bulktext" `shouldReturnRight` [BARK.OK "nesting.bulk", BARK.Failed "primitives.bulk" "expected digest A1ABD6CF9F45CFB7967570CC796CC085872257891DE1DC3D2FB277555E156CC0 but got A1ABD6CF9F45CFB7967570CC796CC085872257891DE1DC3D2FB277555E156CCB", BARK.OK "missing version.bulk"]
+                BARK.verifyManifest ctx "test/bulk/manifest-bad.bulk" `shouldReturnRight` [BARK.OK "nesting.bulk", BARK.Failed "primitives.bulk" "expected digest A1ABD6CF9F45CFB7967570CC796CC085872257891DE1DC3D2FB277555E156CC0 but got A1ABD6CF9F45CFB7967570CC796CC085872257891DE1DC3D2FB277555E156CCB", BARK.OK "missing version.bulk"]
             it "creates a manifest" $ do
-                Right ctx <- loadNotationFiles ctx0 ["test/bulk/config/bark-alpha.bulktext"]
+                ctx <- expectReturnRight $ loadNotationFiles ctx0 ["test/bulk/config/bark-alpha.bulktext"]
                 withCurrentDirectory "test/" $ do
                     withTempFile "./" "manifest.bulk" \path -> do
                         BARK.createManifest ctx path ["bulk/nesting.bulk", "bulk/primitives.bulk", "bulk/missing version.bulk"] `shouldReturnRight` ()
