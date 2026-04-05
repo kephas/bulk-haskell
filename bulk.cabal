@@ -40,6 +40,7 @@ library
       Data.BULK.To
       Data.BULK.Types
       Data.BULK.Utils
+      Polysemy.Megaparsec
   other-modules:
       Paths_bulk
   hs-source-dirs:

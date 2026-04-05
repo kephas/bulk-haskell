@@ -8,8 +8,6 @@
 module Data.BULK.TextNotation where
 
 import Control.Applicative.Combinators (between)
-import Control.Monad.State (MonadState (..), State, evalState, gets, modify, runState)
-import Data.Bifunctor (first)
 import Data.Bits ((.|.))
 import Data.ByteString.Builder qualified as BB
 import Data.ByteString.Lazy (LazyByteString)
@@ -27,23 +25,25 @@ import Data.Text.Encoding.Error (lenientDecode)
 import Data.Text.Lazy qualified as LT
 import Data.Text.Lazy.Encoding qualified as LTE
 import Data.Word (Word8)
-import Polysemy (Embed, Member, Sem, embed, runM)
-import Polysemy.Error (Error, runError, throw)
-import Text.Megaparsec (ErrorFancy (ErrorFail), MonadParsec (..), ParseError (FancyError), ParseErrorBundle (..), ParsecT, ShowErrorComponent (..), TraversableStream, VisualStream, choice, chunk, errorBundlePretty, optional, runParserT, single, some, (<|>))
-import Text.Megaparsec.Char (space1)
-import Text.Megaparsec.Char.Lexer qualified as L
+import Polysemy (Final, InterpreterFor, Member, Sem)
+import Polysemy.Error (Error, runError)
+import Polysemy.NonDet (NonDet)
+import Polysemy.State
+import Text.Megaparsec (ErrorFancy (ErrorFail), ParseError (FancyError), ParseErrorBundle (..), Parsec, ShowErrorComponent (..), TraversableStream, VisualStream, choice, errorBundlePretty, optional, some, (<|>))
+import Prelude hiding (fail)
 
 import Data.BULK.Decode (parseStream)
 import Data.BULK.Encode (encodeExpr, encodeNat)
 import Data.BULK.Types (BULK (..), Name (..), NamespaceID (CoreNS, UnassociatedNS), Ref (..), Value (..))
 import Data.BULK.Utils (IOE, placeError, readFileLBS)
 import Data.Char (isSpace)
+import Polysemy.Megaparsec
 
 data NotationNS = NotationNS {namespace :: NamespaceID, usedNames :: Map Text Word8, availableNames :: [Word8]}
 
 data NamespaceMap = NamespaceMap {usedNamespaces :: Map Text NotationNS, nextMarker :: Int}
 
-type Parser = ParsecT String Text (State NamespaceMap)
+type Parser = Sem '[State NamespaceMap, MonadParsec String Text, NonDet, Final (Parsec String Text)]
 
 parseNotation :: (Member (Error String) r) => Text -> Sem r LazyByteString
 parseNotation =
@@ -51,7 +51,7 @@ parseNotation =
 
 parseNotationNamed :: (Member (Error String) r) => String -> Text -> Sem r LazyByteString
 parseNotationNamed name source =
-    BB.toLazyByteString <$> runParser showFail name notationP source
+    BB.toLazyByteString <$> runParser showFail name source notationP
 
 parseNotationFile :: FilePath -> IOE r BULK
 parseNotationFile = parseNotationFileInto parseStream
@@ -103,7 +103,7 @@ nestedP = do
 
 smallIntP :: Parser BB.Builder
 smallIntP = label "small int" do
-    value <- chunk "w6[" *> L.decimal <* chunk "]"
+    value <- chunk "w6[" *> decimal <* chunk "]"
     if value < 64
         then
             w8 $ 0x80 .|. value
@@ -112,7 +112,7 @@ smallIntP = label "small int" do
 
 smallArrayP :: Parser BB.Builder
 smallArrayP = label "small array" do
-    size <- chunk "#[" *> L.decimal <* chunk "]"
+    size <- chunk "#[" *> decimal <* chunk "]"
     w8 $ 0xC0 .|. size
 
 literalBytesP :: Parser BB.Builder
@@ -122,14 +122,14 @@ literalBytesP = do
   where
     someBytes :: Parser BB.Builder
     someBytes = do
-        void $ optional (single '-')
+        void $ optional $ single '-'
         byte <- byteP
         rest <- try someBytes <|> pure mempty
         pure $ BB.word8 byte <> rest
 
 decimalP :: Parser BB.Builder
 decimalP =
-    encodeNat <$> (L.decimal :: Parser Int) >>= tryEncode
+    encodeNat <$> (decimal @Int) >>= tryEncode
 
 quoteP, notQuoteP :: Parser Text
 quoteP = T.singleton <$> single '"'
@@ -189,6 +189,7 @@ coreP = optional (chunk "bulk:") >> choice parsers
   where
     -- they need to be sorted in reverse to try the longer ones before their prefix (e.g. try foo* before foo)
     parsers = map mkParser $ sortOn (Down . fst) bulkCoreNames
+    mkParser :: (Text, Word8) -> Parser BB.Builder
     mkParser (mnemonic, num) = try $ chunk mnemonic $> (BB.word8 0x10 <> BB.word8 num)
 
 instance ShowErrorComponent [Char] where
@@ -219,27 +220,13 @@ lowHalfBytes = [0x0 .. 0xF] ++ [0xA .. 0xF]
 highHalfBytes = [0x00, 0x10 .. 0xF0] ++ [0xA0, 0xB0 .. 0xF0]
 
 tryEncode :: BULK -> Parser BB.Builder
-tryEncode = runDecode . encodeExpr
+tryEncode = errorToFail . encodeExpr
 
-testP :: Parser Int
-testP = choice (zipWith mkParser ["foo-bar", "foo"] [1, 2]) <* eof
-  where
-    mkParser text int = try $ chunk text $> int
-
-runDecode :: (MonadFail m) => Sem '[Error String, Embed m] a -> m a
-runDecode action = runM do
+errorToFail :: (MonadFail m, Member (Final m) r) => InterpreterFor (Error String) r
+errorToFail action = do
     result <- runError action
-    either (embed . fail) pure result
+    either fail pure result
 
-runParser :: (Member (Error String) r) => (ParseErrorBundle Text String -> String) -> String -> Parser a -> Text -> Sem r a
-runParser mapError name parser =
-    either throw pure . first mapError . flip evalState bulkProfile . runParserT parser name
-
-runParserM :: (MonadState NamespaceMap m) => (ParseErrorBundle Text String -> String) -> Parser a -> Text -> m (Either String a)
-runParserM mapError parser text = do
-    result <- state $ runState $ runParserT parser "-" text
-    pure $ first mapError result
-
-debugParse :: (Show a) => Parser a -> Text -> IO ()
-debugParse parser text = do
-    putStrLn $ either id show (runM $ runError $ runParser errorBundlePretty "debug" parser text)
+runParser :: (Member (Error String) r) => (ParseErrorBundle Text String -> String) -> String -> Text -> Parser a -> Sem r a
+runParser mapError name input =
+    runMegaparsec mapError name input . evalState bulkProfile
