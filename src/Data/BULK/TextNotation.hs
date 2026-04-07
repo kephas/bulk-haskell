@@ -71,7 +71,7 @@ readTextFile file = do
 
 notationP :: Parser BB.Builder
 notationP =
-    mconcat <$> some (lexeme tokenP)
+    mconcat <$> some exprP
 
 lexeme :: Parser a -> Parser a
 lexeme = (<* (space1 <|> eof))
@@ -87,8 +87,8 @@ bulkProfile = NamespaceMap{usedNamespaces = M.singleton "bulk" NotationNS{namesp
 w8 :: (Applicative f) => Word8 -> f BB.Builder
 w8 = pure . BB.word8
 
-tokenP :: Parser BB.Builder
-tokenP = label "token" $ nestedP <|> stringP <|> symbolP "nil" 0 <|> symbolP "(" 1 <|> symbolP ")" 2 <|> smallIntP <|> smallArrayP <|> symbolP "#" 3 <|> literalBytesP <|> stringP <|> coreP <|> try referenceP <|> decimalP
+exprP :: Parser BB.Builder
+exprP = label "expression" $ lexeme $ nestedP <|> stringP <|> symbolP "nil" 0 <|> symbolP "(" 1 <|> symbolP ")" 2 <|> smallIntP <|> smallArrayP <|> arrayP <|> literalBytesP <|> stringP <|> coreP <|> try referenceP <|> decimalP
 
 symbolP :: Text -> Word8 -> Parser BB.Builder
 symbolP sym word =
@@ -114,6 +114,13 @@ smallArrayP :: Parser BB.Builder
 smallArrayP = label "small array" do
     size <- chunk "#[" *> decimal <* chunk "]"
     w8 $ 0xC0 .|. size
+
+arrayP :: Parser BB.Builder
+arrayP = label "generic array" do
+    marker <- lexeme $ symbolP "#" 3
+    size <- exprP
+    content <- literalBytesP
+    pure $ marker <> size <> content
 
 literalBytesP :: Parser BB.Builder
 literalBytesP = do
