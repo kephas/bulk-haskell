@@ -1,6 +1,7 @@
 ( version 1 0 )
-( define ( namespace ( bootstrap:oops #[32] 0x0000000000000000-0000000000000000-0000000000000000-0000000000000000 ) 20 )
-([ nil
+( define ( namespace ( bootstrap:oops #[32] 0x0000000000000000-0000000000000000-0000000000000000-0000000000000000 ) )
+([ ( version 1 0 )
+( ( namespace 20 ) )
 ( mnemonic ( namespace 20 ) "bootstrap" )
 ( explain ( namespace 20 ) "A bootstrapping namespace that is supposed to fail" )
 ( mnemonic bootstrap:oops "oops" )

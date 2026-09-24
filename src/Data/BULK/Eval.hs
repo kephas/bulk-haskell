@@ -28,8 +28,7 @@ import Polysemy.State (State, evalState, execState, gets, modify)
 
 import Data.BULK.Core qualified as Core
 import Data.BULK.Debug (debug, detraceState)
-import Data.BULK.Decode (parseStreamV1)
-import Data.BULK.Encode (pattern Nat)
+import Data.BULK.Decode (parseStream, pattern Nat)
 import Data.BULK.Hash (isPrefixOf, runCheckDigest)
 import Data.BULK.Lens (associatedNamespaces, coreName, knownNS, knownNamespaces, knownPackages, lastingNamespaces, nameMap, nsName, setNsName, _Digest, _Expression, _LazyFunction)
 import Data.BULK.Types (BULK (..), CheckDigest, Context (..), Name (..), Namespace (..), NamespaceID (..), Package (..), Ref (..), Scope (..), TypeMismatch (..), Value (..), Warning (..), withKey)
@@ -150,7 +149,7 @@ getLazyFunction Fun.Mnemonic = coreMnemonic
 getLazyFunction Fun.Trace = coreTrace
 
 coreVersion, coreImport, coreDefine, coreMnemonic, coreTrace :: (Members [State Scope, Error TypeMismatch, Output Warning, Error String] r) => [BULK] -> Sem r (Maybe BULK)
-coreVersion [Nat @Int _, Nat @Int _] =
+coreVersion [Nat _, Nat _] =
     noYield
 coreVersion _ = throw TypeMismatch
 coreImport [Nat marker, Form [Core.Namespace, expr]] = do
@@ -162,8 +161,8 @@ coreImport [Nat base, Form [Core.Package, expr], Nat count, Nat increment] =
 coreImport _ = throw TypeMismatch
 coreDefine [Reference ref, expr] =
     defineReference ref expr
-coreDefine [Form [Core.Namespace, Form [Reference digestRef, Array nsDigest], Nat marker], Array defBytes] = do
-    defineNamespace digestRef nsDigest marker defBytes
+coreDefine [Form [Core.Namespace, Form [Reference digestRef, Array nsDigest]], Array defBytes] = do
+    defineNamespace digestRef nsDigest defBytes
 coreDefine [Form [Core.Package, Form [Reference digestRef, Array pkgDigest]], Array defBytes] = do
     definePackage digestRef pkgDigest defBytes
 coreDefine _ = throw TypeMismatch
@@ -215,57 +214,53 @@ changeValue :: Name -> Maybe Name -> Maybe Name
 changeValue name Nothing = Just name
 changeValue name (Just old) = Just name{N.mnemonic = old.mnemonic}
 
-defineNamespace :: (Members [State Scope, Output Warning, Error String] r) => Ref -> ByteString -> Int -> ByteString -> Sem r (Maybe BULK)
-defineNamespace digestRef nsDigest marker toDigest = do
-    let defineNS = case digestRef of
-            Ref (UnassociatedNS marker') _ | marker == marker' -> defineBootstrappedNamespace
-            _ -> defineQualifiedNamespace
-    defineNS digestRef nsDigest marker toDigest
+defineNamespace :: (Members [State Scope, Output Warning, Error String] r) => Ref -> ByteString -> ByteString -> Sem r (Maybe BULK)
+defineNamespace digestRef nsDigest toDigest = do
+    nested <- parseStream toDigest
+    case nested of
+        Form (Form [Core.Version, Nat 1, Nat 0] : Form (Form [Core.Namespace, Nat marker] : _) : defs) -> do
+            let defineNS = case digestRef of
+                    Ref (UnassociatedNS marker') _ | marker == marker' -> defineBootstrappedNamespace
+                    _ -> defineQualifiedNamespace
+            defineNS digestRef nsDigest toDigest marker defs
+        Form (Form [Core.Version, Nat 1, Nat 0] : Form config : _) ->
+            throw [i|missing namespace marker in config: #{debug config}|]
+        Form (Form [Core.Version, Nat 1, Nat 0] : config : _) ->
+            throw [i|not a form: #{debug config}|]
+        _ ->
+            throw [i|not a namespace definition: #{debug nested}|]
 
-defineBootstrappedNamespace :: (Members [State Scope, Output Warning, Error String] r) => Ref -> ByteString -> Int -> ByteString -> Sem r (Maybe BULK)
-defineBootstrappedNamespace digestRef nsDigest marker toDigest = do
+defineBootstrappedNamespace :: (Members [State Scope, Output Warning, Error String] r) => Ref -> ByteString -> ByteString -> Int -> [BULK] -> Sem r (Maybe BULK)
+defineBootstrappedNamespace digestRef nsDigest toDigest marker defs = do
     foundNS <- gets $ find (matchOn $ Form [Reference digestRef, Array nsDigest]) . view knownNamespaces
     case foundNS of
         Just ns -> do
             associateNS marker $ Just ns.matchID
-            defineQualifiedNamespace (Ref ns.matchID digestRef.name) nsDigest marker toDigest
+            defineQualifiedNamespace (Ref ns.matchID digestRef.name) nsDigest toDigest marker defs
         Nothing -> do
-            ns <- evalNS marker toDigest $ Namespace (UnassociatedNS marker) "<unnamed>" []
+            ns <- evalNS marker defs $ Namespace (UnassociatedNS marker) "<unnamed>" []
             let mnemonic = ns.mnemonic
             throw [i|unable to bootstrap namespace: #{mnemonic}|]
 
-defineQualifiedNamespace :: (Members [State Scope, Output Warning, Error String] r) => Ref -> ByteString -> Int -> ByteString -> Sem r (Maybe BULK)
-defineQualifiedNamespace digestRef nsDigest marker toDigest = do
+defineQualifiedNamespace :: (Members [State Scope, Output Warning, Error String] r) => Ref -> ByteString -> ByteString -> Int -> [BULK] -> Sem r (Maybe BULK)
+defineQualifiedNamespace digestRef nsDigest toDigest marker defs = do
     (qualifiedRef, digest) <- retrieveDigest digestRef
-    nested <- parseStreamV1 toDigest
-    case (runCheckDigest digest nsDigest toDigest, nested) of
-        (Right (), Form (Nil : defs)) -> notYielding do
-            definition <- evalLocalState do
-                let newNS = Namespace{matchID = MatchQualifiedNamePrefix qualifiedRef nsDigest, mnemonic = "", names = []}
-                knowNS newNS
-                associateNS marker $ Just newNS.matchID
-                traverse_ evalExpr defs
-                gets $ getMarkerNS marker
-            whenJust definition \ns -> do
-                knowNS ns
-                modify $ over lastingNamespaces $ S.insert ns.matchID
-                associateNS marker $ Just ns.matchID
-        (Right (), bulk) ->
-            throw [i|syntax error in namespace definition: #{debug bulk}|]
-        (Left err, _bulk) -> do
+    case runCheckDigest digest nsDigest toDigest of
+        Right () -> notYielding do
+            ns <- evalNS marker defs $ Namespace{matchID = MatchQualifiedNamePrefix qualifiedRef nsDigest, mnemonic = "", names = []}
+            knowNS ns
+            modify $ over lastingNamespaces $ S.insert ns.matchID
+            associateNS marker $ Just ns.matchID
+        Left err -> do
             throw [i|verification failed for namespace (#{err})|]
 
-evalNS :: (Members [State Scope, Output Warning, Error String] r) => Int -> ByteString -> Namespace -> Sem r Namespace
-evalNS marker defBytes newNS = do
-    nested <- parseStreamV1 defBytes
-    case nested of
-        Form (Nil : defs) -> evalLocalState do
-            knowNS newNS
-            associateNS marker $ Just newNS.matchID
-            traverse_ evalExpr defs
-            gets (getMarkerNS marker) >>= maybe (throw "lost namespace definition") pure
-        bulk ->
-            throw [i|syntax error in namespace definition: #{debug bulk}|]
+evalNS :: (Members [State Scope, Output Warning, Error String] r) => Int -> [BULK] -> Namespace -> Sem r Namespace
+evalNS marker defs newNS = do
+    evalLocalState do
+        knowNS newNS
+        associateNS marker $ Just newNS.matchID
+        traverse_ evalExpr defs
+        gets (getMarkerNS marker) >>= maybe (throw "lost namespace definition") pure
 
 retrieveDigest :: (Members [State Scope, Error String] r) => Ref -> Sem r (Ref, CheckDigest)
 retrieveDigest name =
@@ -274,9 +269,9 @@ retrieveDigest name =
 definePackage :: (Members [State Scope, Output Warning, Error String] r) => Ref -> ByteString -> ByteString -> Sem r (Maybe BULK)
 definePackage digestRef pkgDigest defBytes = notYielding do
     (qualifiedRef, digest) <- retrieveDigest digestRef
-    nested <- parseStreamV1 defBytes
+    nested <- parseStream defBytes
     case (runCheckDigest digest pkgDigest defBytes, nested) of
-        (Right (), Form (Nil : nss)) -> notYielding do
+        (Right (), Form (Form [Core.Version, Nat 1, Nat 0] : Form [] : nss)) -> notYielding do
             foundNSS <- traverse findNS nss
             let pkgID =
                     if Just qualifiedRef.nsID `elem` foundNSS

@@ -1,7 +1,8 @@
 ( version 1 0 )
-( import 20 ( namespace ( hash0:shake128 #[32] 0x9DBFD6029C1EBE32EC16749703A283DFC1B47C4E925473435529B5769FD89311 ) ) )
-( define ( namespace ( hash0:shake128 #[32] 0x618634262FB13B1B25EBDD148760830A4B928B5E1CD18F605EEA1383124B936C ) 21 )
-([ nil
+( import 20 ( namespace ( hash0:shake128 #[32] 0x568C10F9806BF4AB4FE00600C320A42A3CF8B26333D5B7F3AF9B1B4CCAE4C8CF ) ) )
+( define ( namespace ( hash0:shake128 #[32] 0x5D4231ECB228A92A9EEBD2152916FEB94E001E4876549FF01A9D066DC51C10DF ) )
+([ ( version 1 0 )
+( ( namespace 21 ) )
 ( mnemonic ( namespace 21 ) "123" )
 ( explain ( namespace 21 ) "A minimalist non-boostrapping namespace for tests" )
 ( define 123:one 1 )
@@ -10,6 +11,6 @@
 ( mnemonic 123:one "one" )
 ( mnemonic 123:two "two" )
 ( mnemonic 123:three "three" )
-])    
+])
 )
 123:one 123:two 123:three

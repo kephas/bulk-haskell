@@ -137,7 +137,7 @@ form2 operator operand = Form [operator, operand]
 hash0 :: Namespace
 hash0 =
     Namespace
-        { matchID = MatchNamePrefix 0x00 [hex|9DBFD6029C1EBE32EC16749703A283DFC1B47C4E925473435529B5769FD89311|]
+        { matchID = MatchNamePrefix 0x00 [hex|568C10F9806BF4AB4FE00600C320A42A3CF8B26333D5B7F3AF9B1B4CCAE4C8CF|]
         , mnemonic = "hash0"
         , names = [Name 0x00 (Just "shake128") $ Digest CheckShake128]
         }
@@ -145,7 +145,7 @@ hash0 =
 bark :: Namespace
 bark =
     Namespace
-        { matchID = MatchQualifiedNamePrefix (Ref hash0.matchID $ forceHead hash0.names) [hex|F83B2E34FC34C4C4AD942590FB1BE40B206D9275353BE75CA9B3835B28C48B2F|]
+        { matchID = MatchQualifiedNamePrefix (Ref hash0.matchID $ forceHead hash0.names) [hex|9BE67BEE22C98A3F0774F50E116DE057F94D8919068BDFBCE3EEAB539EE3315D|]
         , mnemonic = "bark"
         , names = []
         }

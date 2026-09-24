@@ -1,6 +1,7 @@
 ( version 1 0 )
-( define ( namespace ( hash0:shake128 #[32] 0x9DBFD6029C1EBE32EC16749703A283DFC1B47C4E925473435529B5769FD89311 ) 20 )
-([ nil
+( define ( namespace ( hash0:shake128 #[32] 0x568C10F9806BF4AB4FE00600C320A42A3CF8B26333D5B7F3AF9B1B4CCAE4C8CF ) )
+([ ( version 1 0 )
+( ( namespace 20 ) )
 ( mnemonic ( namespace 20 ) "hash0" )
 ( explain ( namespace 20 ) "A minimalist bootstrapping namespace for hashing" )
 ( mnemonic hash0:shake128 "shake128" )

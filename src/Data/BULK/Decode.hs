@@ -12,6 +12,7 @@ module Data.BULK.Decode (
     parseLazy,
     VersionConstraint (..),
     toNat,
+    pattern Nat,
 ) where
 
 import Data.Binary.Get

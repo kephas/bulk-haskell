@@ -1,7 +1,8 @@
 ( version 1 0 )
-( import 20 ( namespace ( hash0:shake128 #[32] 0x9DBFD6029C1EBE32EC16749703A283DFC1B47C4E925473435529B5769FD89311 ) ) )
-( define ( namespace ( hash0:shake128 #[0] ) 21 )
-([ nil
+( import 20 ( namespace ( hash0:shake128 #[32] 0x568C10F9806BF4AB4FE00600C320A42A3CF8B26333D5B7F3AF9B1B4CCAE4C8CF ) ) )
+( define ( namespace ( hash0:shake128 #[0] ) )
+([ ( version 1 0 )
+( ( namespace 21 ) )
 ( mnemonic ( namespace 21 ) "123" )
 ( explain ( namespace 21 ) "A minimalist non-boostrapping namespace with an empty digest that should fail" )
 ( define 123:one 1 )
