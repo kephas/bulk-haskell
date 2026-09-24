@@ -4,21 +4,24 @@
 
 module Test.BULK where
 
-import Control.Exception (ErrorCall, assert, handle)
+import Control.Exception (ErrorCall, assert, handle, throwIO)
 import Control.Lens hiding (cons, from)
+import Control.Monad (unless)
 import Data.Bits (Bits (..))
 import Data.ByteString.Lazy (ByteString, cons, pack, singleton)
 import Data.Digits qualified as D
 import Data.Either (isLeft)
 import Data.Foldable (traverse_)
 import Data.Functor (($>))
+import Data.Maybe (listToMaybe)
 import Data.Text (Text)
 import Data.Word (Word8)
+import GHC.Stack (callStack, getCallStack)
 import Polysemy (Sem, run)
 import Polysemy.Error (Error)
 import System.Random (Random)
-import Test.HUnit (assertFailure)
-import Test.Hspec
+import Test.HUnit.Lang (FailureReason (..), HUnitFailure (..), assertFailure)
+import Test.Hspec hiding (shouldBe)
 import Test.QuickCheck (Gen, Property, arbitrary, choose, forAll, listOf, resize)
 import Test.QuickCheck.Instances.ByteString ()
 import Prelude hiding (words)
@@ -44,7 +47,7 @@ test_bigger_arrays_decoding size =
 shouldParseToItself :: BULK -> Expectation
 shouldParseToItself expr = (encodeSeq [expr] >>= parseExpr) `shouldBeRight` expr
 
-parseInts :: (HasCallStack, Integral a, Show a) => [(BULK, ByteString, a)] -> IO ()
+parseInts :: (HasCallStack, Integral a, Debug a) => [(BULK, ByteString, a)] -> IO ()
 parseInts = traverse_ \(kind, bytes, value) ->
     toIntegral (Form [kind, Array bytes]) `shouldBe` Just value
 
@@ -57,10 +60,10 @@ parseExpr = runAll . parseLazy getExpression
 tryPrism :: Prism' a b -> Either String a -> Either String b
 tryPrism prism_ = (>>= maybe (Left "can't convert") Right . preview prism_)
 
-shouldParseToPrism :: (Integral a, Bits a, Show a) => Prism' BULK a -> ByteString -> a -> Expectation
+shouldParseToPrism :: (Integral a, Bits a, Debug a) => Prism' BULK a -> ByteString -> a -> Expectation
 shouldParseToPrism prism_ words num = tryPrism prism_ (parseExpr words) `shouldBeRight` num
 
-shouldParseToNat :: (Integral a, Bits a, Show a) => ByteString -> a -> Expectation
+shouldParseToNat :: (Integral a, Bits a, Debug a) => ByteString -> a -> Expectation
 shouldParseToNat = shouldParseToPrism _Nat
 
 shouldParseToInt :: ByteString -> Int -> Expectation
@@ -69,7 +72,16 @@ shouldParseToInt = shouldParseToPrism _Int
 shouldDenote :: (HasCallStack) => Text -> [BULK] -> Expectation
 text `shouldDenote` list = (parseNotation text >>= parseStreamV1) `shouldBeRight` Form list
 
-shouldBeRight :: (HasCallStack, Debug e, Show a, Eq a) => Either e a -> a -> Expectation
+shouldBe :: (Debug a, Eq a) => a -> a -> Expectation
+actual `shouldBe` expected =
+    unless (actual == expected) $
+        throwIO $
+            HUnitFailure location $
+                ExpectedButGot Nothing (debug expected) (debug actual)
+  where
+    location = fmap snd $ listToMaybe $ getCallStack $ callStack
+
+shouldBeRight :: (HasCallStack, Debug e, Debug a, Eq a) => Either e a -> a -> Expectation
 result `shouldBeRight` expected =
     case result of
         Right actual ->
@@ -77,7 +89,7 @@ result `shouldBeRight` expected =
         Left err ->
             expectationFailure $ debug err
 
-shouldReturnRight :: (HasCallStack, Debug e, Show a, Eq a) => IO (Either e a) -> a -> Expectation
+shouldReturnRight :: (HasCallStack, Debug e, Debug a, Eq a) => IO (Either e a) -> a -> Expectation
 shouldReturnRight action expected = do
     actual <- action
     actual `shouldBeRight` expected

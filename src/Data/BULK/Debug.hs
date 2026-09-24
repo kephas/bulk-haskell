@@ -1,5 +1,6 @@
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE IncoherentInstances #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
@@ -103,11 +104,15 @@ instance (Debug a, Debug b) => Debug (a, b) where
 instance (Debug k, Debug v) => Debug (M.Map k v) where
     debug = debug . map (bimap debug debug) . M.toList
 
+instance Debug ()
+
 instance Debug Int
 
 instance Debug Word8
 
 instance Debug Int64
+
+instance Debug Integer
 
 instance {-# OVERLAPPING #-} Debug [Char] where
     debug = id

@@ -14,7 +14,7 @@ import Data.String.Interpolate (i)
 import Data.Text (Text)
 import System.Directory (removeFile, withCurrentDirectory)
 import System.IO (hClose, openTempFile)
-import Test.Hspec
+import Test.Hspec hiding (shouldBe, shouldBeRight)
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck (chooseInt, elements, forAll, vectorOf)
 import Witch (from)
@@ -24,6 +24,7 @@ import Data.BULK
 import Data.BULK.API (encodeSeq)
 import Data.BULK.BARK qualified as BARK
 import Data.BULK.Core qualified as Core
+import Data.BULK.Debug (Debug)
 import Data.BULK.Eval (mkContext)
 import Data.BULK.To (toBULKWith)
 import Test.BULK
@@ -330,6 +331,8 @@ bar =
 
 data Foo = Foo Bool Bool Int deriving (Eq, Show)
 
+instance Debug Foo
+
 instance FromBULK Foo where
     parseBULK = foo <*:> "foo" $ do
         Foo <$> nextBULK <*> nextBULK <*> nextBULK
@@ -343,6 +346,8 @@ instance ToBULK Foo where
         pure $ Form [fooOp, b1B, b2B, numB]
 
 data Bar = Bar Int Foo deriving (Eq, Show)
+
+instance Debug Bar
 
 instance FromBULK Bar where
     parseBULK = bar <*:> "bar" $ do
@@ -360,7 +365,7 @@ withTempFile dir template =
         hClose handle
         return path
 
-shouldRoundTrip :: (Eq a, Show a, ToBULK a, FromBULK a) => Context -> [a] -> Expectation
+shouldRoundTrip :: (Eq a, Debug a, ToBULK a, FromBULK a) => Context -> [a] -> Expectation
 shouldRoundTrip ctx values = do
     binary <- expectRight $ encode ctx values
     decode ctx binary `shouldBeRight` values

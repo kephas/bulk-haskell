@@ -158,3 +158,5 @@ instance Debug BARK where
 
 instance Debug Entry where
     debug Description{path, hash = Hash{alg, digest}} = [i|(#{path}: #{alg}=#{debug digest}|]
+
+instance Debug Verification
